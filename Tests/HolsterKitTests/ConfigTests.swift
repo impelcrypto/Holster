@@ -20,8 +20,7 @@ final class ConfigTests: XCTestCase {
         prompt: grammar.md
         provider: cliproxy
         model: gpt-5.6-sol
-        temperature: 0
-        stream: true
+        reasoning: medium
     """
 
     func testParsesValidConfig() throws {
@@ -32,14 +31,13 @@ final class ConfigTests: XCTestCase {
         let command = config.commands[0]
         XCTAssertEqual(command.name, "Grammar Teacher")
         XCTAssertEqual(command.model, "gpt-5.6-sol")
-        XCTAssertEqual(command.temperature, 0)
-        XCTAssertTrue(command.wantsStream)
+        XCTAssertEqual(command.reasoning, "medium")
         let resolved = try config.resolveProvider(for: command)
         XCTAssertEqual(resolved.name, "cliproxy")
         XCTAssertEqual(resolved.provider.baseURL, "http://127.0.0.1:8317/v1")
     }
 
-    func testStreamDefaultsToTrue() throws {
+    func testLegacyKeysAreIgnored() throws {
         let config = try Config.parse(yaml: """
         providers:
           p:
@@ -48,8 +46,31 @@ final class ConfigTests: XCTestCase {
           - name: X
             prompt: x.md
             model: m
+            temperature: 0
+            stream: true
         """)
-        XCTAssertTrue(config.commands[0].wantsStream)
+        XCTAssertEqual(config.commands[0].name, "X")
+    }
+
+    func testReasoningFallsBackToLowOnOpenCodeGo() {
+        let command = CommandConfig(name: "X", prompt: "x.md", model: "m")
+        XCTAssertEqual(command.resolvedReasoning(providerName: "opencode-go"), "low")
+        XCTAssertNil(command.resolvedReasoning(providerName: "cliproxy"))
+        let explicit = CommandConfig(name: "X", prompt: "x.md", model: "m", reasoning: "high")
+        XCTAssertEqual(explicit.resolvedReasoning(providerName: "opencode-go"), "high")
+    }
+
+    func testInvalidReasoningFails() {
+        XCTAssertThrowsError(try Config.parse(yaml: """
+        providers:
+          p:
+            base_url: http://localhost:1/v1
+        commands:
+          - name: X
+            prompt: x.md
+            model: m
+            reasoning: extreme
+        """))
     }
 
     func testSingleProviderIsImplicitDefault() throws {

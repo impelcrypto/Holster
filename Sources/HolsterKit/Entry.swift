@@ -102,18 +102,20 @@ enum CLIMode {
 
         do {
             let template = try store.promptText(for: command)
-            let provider = try config.resolveProvider(for: command).provider
+            let (providerName, provider) = try config.resolveProvider(for: command)
             let clipboard = NSPasteboard.general.string(forType: .string)
             let request = LLMRequest(
                 baseURL: provider.baseURL,
                 apiKey: provider.apiKey,
                 model: command.model,
                 prompt: PromptTemplate.render(template, selection: input, clipboard: clipboard),
-                temperature: command.temperature,
-                stream: noStream ? false : command.wantsStream)
-            for try await chunk in LLMClient.stream(request) {
-                fputs(chunk, stdout)
-                fflush(stdout)
+                reasoningEffort: command.resolvedReasoning(providerName: providerName),
+                stream: !noStream)
+            for try await event in LLMClient.stream(request) {
+                if case .content(let chunk) = event {
+                    fputs(chunk, stdout)
+                    fflush(stdout)
+                }
             }
             fputs("\n", stdout)
             return 0

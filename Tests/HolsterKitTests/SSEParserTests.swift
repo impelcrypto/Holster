@@ -40,6 +40,16 @@ final class SSEParserTests: XCTestCase {
         XCTAssertNil(SSEParser.parseLine(line))
     }
 
+    func testReasoningDeltaSignalsThinking() {
+        let line = #"data: {"choices":[{"delta":{"reasoning_content":"hmm"}}]}"#
+        XCTAssertEqual(SSEParser.parseLine(line), .reasoning)
+    }
+
+    func testContentWinsOverReasoning() {
+        let line = #"data: {"choices":[{"delta":{"content":"Hi","reasoning_content":"hmm"}}]}"#
+        XCTAssertEqual(SSEParser.parseLine(line), .delta("Hi"))
+    }
+
     func testHandlesMultibyteContent() {
         let line = #"data: {"choices":[{"delta":{"content":"日本語🐎"}}]}"#
         XCTAssertEqual(SSEParser.parseLine(line), .delta("日本語🐎"))

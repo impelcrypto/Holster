@@ -5,7 +5,9 @@ public struct LLMRequest {
     public var apiKey: String?
     public var model: String
     public var prompt: String
-    public var temperature: Double?
+    /// "low" / "medium" / "high"; nil omits the field entirely — some
+    /// OpenAI-compatible endpoints reject it for non-reasoning models.
+    public var reasoningEffort: String?
     public var stream: Bool
 
     public init(
@@ -13,14 +15,14 @@ public struct LLMRequest {
         apiKey: String? = nil,
         model: String,
         prompt: String,
-        temperature: Double? = nil,
+        reasoningEffort: String? = nil,
         stream: Bool = true
     ) {
         self.baseURL = baseURL
         self.apiKey = apiKey
         self.model = model
         self.prompt = prompt
-        self.temperature = temperature
+        self.reasoningEffort = reasoningEffort
         self.stream = stream
     }
 }
@@ -43,17 +45,24 @@ public enum LLMError: LocalizedError {
     }
 }
 
+public enum LLMEvent: Equatable {
+    /// Hidden thinking is arriving; nothing to display yet, but the stream
+    /// is alive (reasoning models emit this before any content).
+    case reasoning
+    case content(String)
+}
+
 public enum LLMClient {
     /// Yields content deltas. With request.stream == false, yields the full
     /// text once — callers treat both modes identically.
-    public static func stream(_ request: LLMRequest) -> AsyncThrowingStream<String, Error> {
+    public static func stream(_ request: LLMRequest) -> AsyncThrowingStream<LLMEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     if request.stream {
                         try await streamSSE(request, into: continuation)
                     } else {
-                        continuation.yield(try await completeOnce(request))
+                        continuation.yield(.content(try await completeOnce(request)))
                     }
                     continuation.finish()
                 } catch {
@@ -99,14 +108,17 @@ public enum LLMClient {
 
     private static func streamSSE(
         _ request: LLMRequest,
-        into continuation: AsyncThrowingStream<String, Error>.Continuation
+        into continuation: AsyncThrowingStream<LLMEvent, Error>.Continuation
     ) async throws {
         let urlRequest = try makeChatRequest(request)
         let (bytes, response) = try await URLSession.shared.bytes(for: urlRequest)
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             var body = ""
-            for try await line in bytes.lines where body.count < 2000 {
+            // `where` would only skip appends while the server keeps the
+            // connection open; break so an unclosed error response can't hang.
+            for try await line in bytes.lines {
                 body += line
+                if body.count >= 2000 { break }
             }
             throw LLMError.http(http.statusCode, body)
         }
@@ -115,7 +127,9 @@ public enum LLMClient {
             switch SSEParser.parseLine(line) {
             case .delta(let text):
                 sawContent = true
-                continuation.yield(text)
+                continuation.yield(.content(text))
+            case .reasoning:
+                continuation.yield(.reasoning)
             case .error(let message):
                 throw LLMError.api(message)
             case .done:
@@ -138,7 +152,12 @@ public enum LLMClient {
             let model: String
             let messages: [Message]
             let stream: Bool
-            let temperature: Double?
+            let reasoningEffort: String?
+
+            enum CodingKeys: String, CodingKey {
+                case model, messages, stream
+                case reasoningEffort = "reasoning_effort"
+            }
         }
         guard let url = endpoint(request.baseURL, path: "chat/completions") else {
             throw LLMError.badURL(request.baseURL)
@@ -152,7 +171,7 @@ public enum LLMClient {
             model: request.model,
             messages: [.init(role: "user", content: request.prompt)],
             stream: request.stream,
-            temperature: request.temperature))
+            reasoningEffort: request.reasoningEffort))
         return urlRequest
     }
 

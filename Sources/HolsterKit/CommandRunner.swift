@@ -74,19 +74,21 @@ public final class CommandRunner {
             guard let config = store.config else {
                 throw ConfigError.validation("No valid config loaded")
             }
-            let provider = try config.resolveProvider(for: command).provider
+            let (providerName, provider) = try config.resolveProvider(for: command)
             let clipboard = NSPasteboard.general.string(forType: .string)
             let request = LLMRequest(
                 baseURL: provider.baseURL,
                 apiKey: provider.apiKey,
                 model: command.model,
                 prompt: PromptTemplate.render(template, selection: selection, clipboard: clipboard),
-                temperature: command.temperature,
-                stream: command.wantsStream)
+                reasoningEffort: command.resolvedReasoning(providerName: providerName))
 
-            for try await chunk in LLMClient.stream(request) {
+            for try await event in LLMClient.stream(request) {
                 guard !Task.isCancelled else { return }
-                viewModel.append(chunk)
+                switch event {
+                case .reasoning: viewModel.noteReasoning()
+                case .content(let chunk): viewModel.append(chunk)
+                }
             }
             viewModel.finish()
         } catch is CancellationError {

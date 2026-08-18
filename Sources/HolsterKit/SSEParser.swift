@@ -6,13 +6,24 @@ import Foundation
 public enum SSEParser {
     public enum Event: Equatable {
         case delta(String)
+        /// Hidden thinking (reasoning_content); proves the stream is alive
+        /// even though there is nothing to display yet.
+        case reasoning
         case done
         case error(String)
     }
 
     private struct Chunk: Decodable {
         struct Choice: Decodable {
-            struct Delta: Decodable { let content: String? }
+            struct Delta: Decodable {
+                let content: String?
+                let reasoningContent: String?
+
+                enum CodingKeys: String, CodingKey {
+                    case content
+                    case reasoningContent = "reasoning_content"
+                }
+            }
             let delta: Delta?
         }
         struct APIError: Decodable { let message: String? }
@@ -34,6 +45,9 @@ public enum SSEParser {
         }
         if let content = chunk.choices?.first?.delta?.content, !content.isEmpty {
             return .delta(content)
+        }
+        if let thinking = chunk.choices?.first?.delta?.reasoningContent, !thinking.isEmpty {
+            return .reasoning
         }
         return nil
     }

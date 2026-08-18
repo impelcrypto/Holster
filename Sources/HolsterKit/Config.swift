@@ -44,17 +44,16 @@ public struct CommandConfig: Codable, Equatable, Identifiable {
     public var prompt: String
     public var provider: String?
     public var model: String
-    public var temperature: Double?
-    public var stream: Bool?
+    /// Reasoning effort ("low" / "medium" / "high"); nil sends nothing.
+    public var reasoning: String?
     /// Selecting text in the result window copies it automatically.
     public var copyOnSelect: Bool?
 
     public var id: String { name }
-    public var wantsStream: Bool { stream ?? true }
     public var wantsCopyOnSelect: Bool { copyOnSelect ?? false }
 
     enum CodingKeys: String, CodingKey {
-        case name, hotkey, prompt, provider, model, temperature, stream
+        case name, hotkey, prompt, provider, model, reasoning
         case copyOnSelect = "copy_on_select"
     }
 
@@ -64,8 +63,7 @@ public struct CommandConfig: Codable, Equatable, Identifiable {
         prompt: String,
         provider: String? = nil,
         model: String,
-        temperature: Double? = nil,
-        stream: Bool? = nil,
+        reasoning: String? = nil,
         copyOnSelect: Bool? = nil
     ) {
         self.name = name
@@ -73,8 +71,7 @@ public struct CommandConfig: Codable, Equatable, Identifiable {
         self.prompt = prompt
         self.provider = provider
         self.model = model
-        self.temperature = temperature
-        self.stream = stream
+        self.reasoning = reasoning
         self.copyOnSelect = copyOnSelect
     }
 }
@@ -149,6 +146,10 @@ extension Config {
                 throw ConfigError.validation("A command has an empty name")
             }
             _ = try resolveProvider(for: command)
+            if let effort = command.reasoning, !["low", "medium", "high"].contains(effort) {
+                throw ConfigError.validation(
+                    "Command \"\(command.name)\": reasoning must be low, medium or high")
+            }
             if let hotkey = command.hotkey, hotkey.isEmpty == false {
                 _ = try HotkeyParser.parse(hotkey)
             }

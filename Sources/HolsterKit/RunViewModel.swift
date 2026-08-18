@@ -12,6 +12,8 @@ public final class RunViewModel: ObservableObject {
     @Published public private(set) var markdown = ""
     @Published public private(set) var state: State = .capturing
     @Published public private(set) var toast: String?
+    /// Hidden thinking is arriving but no visible content yet.
+    @Published public private(set) var isReasoning = false
 
     public let commandName: String
     public let modelName: String
@@ -46,9 +48,14 @@ public final class RunViewModel: ObservableObject {
         state = .streaming
     }
 
+    public func noteReasoning() {
+        if !isReasoning { isReasoning = true }
+    }
+
     /// MarkdownUI re-parses the whole document on every update, so deltas are
     /// coalesced to ~10 renders/second.
     public func append(_ chunk: String) {
+        if isReasoning { isReasoning = false }
         accumulated += chunk
         guard !flushScheduled else { return }
         flushScheduled = true

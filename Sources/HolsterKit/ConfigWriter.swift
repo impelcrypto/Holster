@@ -1,6 +1,23 @@
 import Foundation
 import Yams
 
+/// Providers the GUI can create on demand, without hand-editing config.yaml.
+public enum ProviderPreset {
+    public static let openCodeGo = "opencode-go"
+    public static let openCodeGoBaseURL = "https://opencode.ai/zen/go/v1"
+    public static let custom = "custom"
+}
+
+extension CommandConfig {
+    /// Every model OpenCode Go serves today thinks by default, so an absent
+    /// reasoning field means full-thinking latency, not "no reasoning" —
+    /// fall back to low there instead.
+    // ponytail: provider-level heuristic; per-model table if Go adds non-thinkers
+    public func resolvedReasoning(providerName: String) -> String? {
+        reasoning ?? (providerName == ProviderPreset.openCodeGo ? "low" : nil)
+    }
+}
+
 /// GUI edits write back to the same files the user can edit by hand.
 /// Note: YAML comments do not survive a GUI save (the file is re-serialized).
 extension ConfigStore {
@@ -9,8 +26,11 @@ extension ConfigStore {
         public var hotkey: String
         public var provider: String
         public var model: String
-        public var temperatureText: String
-        public var stream: Bool
+        /// "" = no reasoning field sent; otherwise "low" / "medium" / "high".
+        public var reasoning: String
+        /// Only written for the opencode-go / custom presets.
+        public var baseURL: String
+        public var apiKey: String
         public var copyOnSelect: Bool
         public var promptFile: String
         public var promptText: String
@@ -20,8 +40,9 @@ extension ConfigStore {
             hotkey: String = "",
             provider: String = "",
             model: String = "",
-            temperatureText: String = "",
-            stream: Bool = true,
+            reasoning: String = "",
+            baseURL: String = "",
+            apiKey: String = "",
             copyOnSelect: Bool = false,
             promptFile: String = "",
             promptText: String = ""
@@ -30,8 +51,9 @@ extension ConfigStore {
             self.hotkey = hotkey
             self.provider = provider
             self.model = model
-            self.temperatureText = temperatureText
-            self.stream = stream
+            self.reasoning = reasoning
+            self.baseURL = baseURL
+            self.apiKey = apiKey
             self.copyOnSelect = copyOnSelect
             self.promptFile = promptFile
             self.promptText = promptText
@@ -39,13 +61,16 @@ extension ConfigStore {
     }
 
     public func draft(for command: CommandConfig) -> CommandDraft {
-        CommandDraft(
+        let providerName = command.provider ?? config?.defaultProvider ?? ""
+        let provider = config?.providers[providerName]
+        return CommandDraft(
             name: command.name,
             hotkey: command.hotkey ?? "",
-            provider: command.provider ?? config?.defaultProvider ?? "",
+            provider: providerName,
             model: command.model,
-            temperatureText: command.temperature.map { formatTemperature($0) } ?? "",
-            stream: command.wantsStream,
+            reasoning: command.reasoning ?? "",
+            baseURL: provider?.baseURL ?? "",
+            apiKey: provider?.apiKey ?? "",
             copyOnSelect: command.wantsCopyOnSelect,
             promptFile: command.prompt,
             promptText: (try? promptText(for: command)) ?? "")
@@ -65,14 +90,22 @@ extension ConfigStore {
             throw ConfigError.validation("Model cannot be empty")
         }
 
-        let temperature: Double?
-        let trimmedTemperature = draft.temperatureText.trimmingCharacters(in: .whitespaces)
-        if trimmedTemperature.isEmpty {
-            temperature = nil
-        } else if let value = Double(trimmedTemperature) {
-            temperature = value
-        } else {
-            throw ConfigError.validation("Temperature must be a number (or empty for the provider default)")
+        switch draft.provider {
+        case ProviderPreset.openCodeGo:
+            // ponytail: preset always re-asserts the canonical URL; hand-edits lose.
+            config.providers[ProviderPreset.openCodeGo] = ProviderConfig(
+                baseURL: ProviderPreset.openCodeGoBaseURL,
+                apiKey: draft.apiKey)
+        case ProviderPreset.custom:
+            let baseURL = draft.baseURL.trimmingCharacters(in: .whitespaces)
+            guard !baseURL.isEmpty else {
+                throw ConfigError.validation("Custom endpoint needs a base URL (e.g. https://openrouter.ai/api/v1)")
+            }
+            config.providers[ProviderPreset.custom] = ProviderConfig(
+                baseURL: baseURL,
+                apiKey: draft.apiKey)
+        default:
+            break
         }
 
         let promptFile = draft.promptFile.isEmpty ? slugify(name) + ".md" : draft.promptFile
@@ -82,8 +115,7 @@ extension ConfigStore {
             prompt: promptFile,
             provider: draft.provider.isEmpty ? nil : draft.provider,
             model: draft.model.trimmingCharacters(in: .whitespaces),
-            temperature: temperature,
-            stream: draft.stream ? nil : false,
+            reasoning: draft.reasoning.isEmpty ? nil : draft.reasoning,
             copyOnSelect: draft.copyOnSelect ? true : nil)
 
         if let originalName, let index = config.commands.firstIndex(where: { $0.name == originalName }) {
@@ -121,9 +153,5 @@ extension ConfigStore {
             character.isLetter || character.isNumber ? character : "-"
         }
         return String(mapped).split(separator: "-").joined(separator: "-")
-    }
-
-    private func formatTemperature(_ value: Double) -> String {
-        value == value.rounded() ? String(Int(value)) : String(value)
     }
 }

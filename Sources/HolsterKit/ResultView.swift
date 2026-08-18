@@ -61,6 +61,11 @@ struct ResultView: View {
                 .foregroundStyle(.secondary)
             Spacer()
             if model.state == .capturing || model.state == .streaming {
+                if model.isReasoning, model.markdown.isEmpty {
+                    Text("Reasoning…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 ProgressView().controlSize(.small)
             }
         }

@@ -101,11 +101,27 @@ private struct CommandEditor: View {
 
     @State private var draft = ConfigStore.CommandDraft()
     @State private var models: [String] = []
+    @State private var modelsError: String?
     @State private var errorMessage: String?
     @State private var confirmDelete = false
 
     private var providerNames: [String] {
-        (store.config?.providers.keys).map(Array.init)?.sorted() ?? []
+        var names = Set((store.config?.providers.keys).map(Array.init) ?? [])
+        names.insert(ProviderPreset.openCodeGo)
+        names.insert(ProviderPreset.custom)
+        return names.sorted()
+    }
+
+    private var isPresetProvider: Bool {
+        draft.provider == ProviderPreset.openCodeGo || draft.provider == ProviderPreset.custom
+    }
+
+    private func providerLabel(_ name: String) -> String {
+        switch name {
+        case ProviderPreset.openCodeGo: return "OpenCode Go"
+        case ProviderPreset.custom: return "Custom Endpoint"
+        default: return name
+        }
     }
 
     var body: some View {
@@ -122,21 +138,44 @@ private struct CommandEditor: View {
                 }
             }
             Section {
-                Picker("Provider", selection: $draft.provider) {
-                    ForEach(providerNames, id: \.self) { Text($0).tag($0) }
+                Picker("Provider", selection: providerBinding) {
+                    ForEach(providerNames, id: \.self) { Text(providerLabel($0)).tag($0) }
                 }
-                .onChange(of: draft.provider) { fetchModels() }
+                if draft.provider == ProviderPreset.custom {
+                    TextField("Base URL", text: $draft.baseURL,
+                              prompt: Text("https://openrouter.ai/api/v1"))
+                        .font(.callout.monospaced())
+                }
+                if isPresetProvider {
+                    TextField("API Key", text: $draft.apiKey, prompt: Text("sk-…"))
+                        .font(.callout.monospaced())
+                        .onSubmit { fetchModels() }
+                }
                 Picker("Model", selection: $draft.model) {
                     if !models.contains(draft.model), !draft.model.isEmpty {
                         Text(draft.model).tag(draft.model)
                     }
                     ForEach(models, id: \.self) { Text($0).tag($0) }
                 }
-                TextField("Model id (free form)", text: $draft.model)
-                    .font(.callout.monospaced())
-                TextField("Temperature", text: $draft.temperatureText,
-                          prompt: Text("provider default"))
-                Toggle("Stream response", isOn: $draft.stream)
+                if let modelsError {
+                    HStack {
+                        Text("Couldn't load models: \(modelsError)")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .lineLimit(2)
+                        Spacer()
+                        Button("Retry") { fetchModels() }
+                            .controlSize(.small)
+                    }
+                }
+                Picker("Reasoning", selection: $draft.reasoning) {
+                    if draft.provider != ProviderPreset.openCodeGo {
+                        Text("None").tag("")
+                    }
+                    Text("Low").tag("low")
+                    Text("Medium").tag("medium")
+                    Text("High").tag("high")
+                }
                 Toggle("Auto-copy selected text in result window", isOn: $draft.copyOnSelect)
             }
             Section("Prompt — {selection} is replaced with the selected text") {
@@ -196,16 +235,74 @@ private struct CommandEditor: View {
         // Seeding the scratch value-unregisters whatever combo it held before
         // (e.g. the previously selected command's hotkey); re-assert them all.
         store.load()
+        syncProviderFields()
         fetchModels()
+    }
+
+    /// Picker writes go through here so only USER changes reset the model;
+    /// loadDraft assigns draft directly and must keep the saved model.
+    private var providerBinding: Binding<String> {
+        Binding(
+            get: { draft.provider },
+            set: { name in
+                guard name != draft.provider else { return }
+                draft.provider = name
+                draft.model = ""
+                // Reasoning must not carry over either: "low" left behind by
+                // OpenCode Go turns THINKING ON for Ollama's hybrid models.
+                draft.reasoning = name == ProviderPreset.openCodeGo ? "low" : ""
+                syncProviderFields()
+                fetchModels()
+            })
+    }
+
+    /// Refill endpoint fields when the provider changes: saved entry first,
+    /// then the preset default, so a save never wipes a stored key.
+    private func syncProviderFields() {
+        if let saved = store.config?.providers[draft.provider] {
+            draft.baseURL = saved.baseURL
+            draft.apiKey = saved.apiKey ?? ""
+        } else {
+            draft.baseURL = draft.provider == ProviderPreset.openCodeGo
+                ? ProviderPreset.openCodeGoBaseURL : ""
+            draft.apiKey = ""
+        }
+        // No "None" on OpenCode Go (its models all think by default).
+        if draft.provider == ProviderPreset.openCodeGo, draft.reasoning.isEmpty {
+            draft.reasoning = "low"
+        }
     }
 
     private func fetchModels() {
         models = []
-        guard let provider = store.config?.providers[draft.provider] else { return }
+        modelsError = nil
+        let baseURL: String
+        let apiKey: String?
+        if isPresetProvider {
+            baseURL = draft.provider == ProviderPreset.openCodeGo
+                ? ProviderPreset.openCodeGoBaseURL : draft.baseURL
+            apiKey = draft.apiKey
+        } else if let provider = store.config?.providers[draft.provider] {
+            baseURL = provider.baseURL
+            apiKey = provider.apiKey
+        } else {
+            return
+        }
+        guard !baseURL.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        // Go always rejects keyless requests; don't flash a 401 before a key is typed.
+        if draft.provider == ProviderPreset.openCodeGo, draft.apiKey.isEmpty { return }
+        let requestedProvider = draft.provider
         Task { @MainActor in
-            if let fetched = try? await LLMClient.listModels(
-                baseURL: provider.baseURL, apiKey: provider.apiKey) {
+            do {
+                let fetched = try await LLMClient.listModels(baseURL: baseURL, apiKey: apiKey)
+                guard draft.provider == requestedProvider else { return }
                 models = fetched
+                if draft.model.isEmpty, let first = fetched.first {
+                    draft.model = first
+                }
+            } catch {
+                guard draft.provider == requestedProvider else { return }
+                modelsError = error.localizedDescription
             }
         }
     }

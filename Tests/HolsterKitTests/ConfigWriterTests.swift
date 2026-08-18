@@ -42,14 +42,14 @@ final class ConfigWriterTests: XCTestCase {
         draft.hotkey = "cmd+shift+g"
         draft.provider = "local"
         draft.model = "model-b"
-        draft.temperatureText = "0"
+        draft.reasoning = "high"
         draft.promptText = "Check: {selection}"
         try store.saveCommand(originalName: nil, draft: draft)
 
         let saved = try XCTUnwrap(store.command(named: "Grammar Teacher"))
         XCTAssertEqual(saved.model, "model-b")
         XCTAssertEqual(saved.hotkey, "cmd+shift+g")
-        XCTAssertEqual(saved.temperature, 0)
+        XCTAssertEqual(saved.reasoning, "high")
         XCTAssertEqual(saved.prompt, "grammar-teacher.md")
         XCTAssertEqual(try store.promptText(for: saved), "Check: {selection}")
         // The rewritten YAML must survive a fresh parse.
@@ -78,11 +78,11 @@ final class ConfigWriterTests: XCTestCase {
             atPath: directory.appendingPathComponent("prompts/existing.md").path))
     }
 
-    func testRejectsBadTemperature() {
+    func testRejectsInvalidReasoning() {
         var draft = ConfigStore.CommandDraft()
         draft.name = "X"
         draft.model = "m"
-        draft.temperatureText = "warm"
+        draft.reasoning = "extreme"
         XCTAssertThrowsError(try store.saveCommand(originalName: nil, draft: draft))
     }
 
@@ -108,15 +108,41 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertFalse(existing.wantsCopyOnSelect)
     }
 
-    func testStreamFalseSurvivesRoundTrip() throws {
+    func testCustomProviderIsUpsertedOnSave() throws {
         var draft = ConfigStore.CommandDraft()
-        draft.name = "NoStream"
+        draft.name = "Router"
         draft.model = "m"
-        draft.provider = "local"
-        draft.stream = false
+        draft.provider = ProviderPreset.custom
+        draft.baseURL = "https://openrouter.ai/api/v1"
+        draft.apiKey = "sk-test"
         draft.promptText = "{selection}"
         try store.saveCommand(originalName: nil, draft: draft)
-        let saved = try XCTUnwrap(store.command(named: "NoStream"))
-        XCTAssertFalse(saved.wantsStream)
+
+        let provider = try XCTUnwrap(store.config?.providers[ProviderPreset.custom])
+        XCTAssertEqual(provider.baseURL, "https://openrouter.ai/api/v1")
+        XCTAssertEqual(provider.apiKey, "sk-test")
+        XCTAssertEqual(store.command(named: "Router")?.provider, ProviderPreset.custom)
+    }
+
+    func testCustomProviderRequiresBaseURL() {
+        var draft = ConfigStore.CommandDraft()
+        draft.name = "Router"
+        draft.model = "m"
+        draft.provider = ProviderPreset.custom
+        XCTAssertThrowsError(try store.saveCommand(originalName: nil, draft: draft))
+    }
+
+    func testOpenCodeGoPresetGetsCanonicalBaseURL() throws {
+        var draft = ConfigStore.CommandDraft()
+        draft.name = "Go"
+        draft.model = "m"
+        draft.provider = ProviderPreset.openCodeGo
+        draft.apiKey = "sk-go"
+        draft.promptText = "{selection}"
+        try store.saveCommand(originalName: nil, draft: draft)
+
+        let provider = try XCTUnwrap(store.config?.providers[ProviderPreset.openCodeGo])
+        XCTAssertEqual(provider.baseURL, ProviderPreset.openCodeGoBaseURL)
+        XCTAssertEqual(provider.apiKey, "sk-go")
     }
 }

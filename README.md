@@ -57,6 +57,12 @@ providers:                 # any OpenAI-compatible endpoints
     api_key: ""            # only if your proxy requires one
   ollama:
     base_url: http://127.0.0.1:11434/v1
+  opencode-go:             # https://opencode.ai/docs/go/
+    base_url: https://opencode.ai/zen/go/v1
+    api_key: ""
+  custom:                  # e.g. OpenRouter; editable from Settings
+    base_url: https://openrouter.ai/api/v1
+    api_key: ""
 
 default_provider: cliproxy
 
@@ -72,9 +78,14 @@ commands:
     prompt: grammar.md     # file under prompts/, {selection} gets replaced
     provider: cliproxy
     model: gpt-5.6-sol
-    temperature: 0
-    stream: true           # set false if your proxy's SSE misbehaves
+    reasoning: medium      # low / medium / high; omit to send no reasoning field
+                           # (on opencode-go an omitted value falls back to low:
+                           #  its models think by default, so "none" never helps)
 ```
+
+The Settings window always offers `opencode-go` (OpenCode Go, fixed base URL)
+and `custom` (free-form base URL) as providers and writes them to `providers:`
+on save.
 
 Prompt files support two placeholders: `{selection}` (the captured selection)
 and `{clipboard}` (current clipboard contents).
