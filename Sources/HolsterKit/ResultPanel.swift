@@ -30,6 +30,10 @@ final class ResultPanel: NSPanel {
         titlebarAppearsTransparent = true
         isMovableByWindowBackground = true
         isReleasedWhenClosed = false
+        // Transparent window: the content's NSVisualEffectView supplies the
+        // blurred backdrop; titled windows still clip to rounded corners.
+        isOpaque = false
+        backgroundColor = .clear
         // Normal level: frontmost when presented, but clicking another window
         // sends the panel behind it instead of pinning it above everything.
         level = .normal

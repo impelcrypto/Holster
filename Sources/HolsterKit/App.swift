@@ -51,7 +51,7 @@ struct HolsterApp: App {
         Window("Holster Settings", id: "settings") {
             SettingsView(store: store)
         }
-        .defaultSize(width: 820, height: 560)
+        .defaultSize(width: 860, height: 580)
     }
 }
 
@@ -59,6 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Accessory policy also when launched via `swift run` (no Info.plist).
         NSApp.setActivationPolicy(.accessory)
+        // App-wide dark theme: also reaches AppKit-backed controls (recorder,
+        // alerts) that per-view SwiftUI colorScheme forcing would miss.
+        NSApp.appearance = NSAppearance(named: .darkAqua)
         AppState.shared.start()
     }
 }

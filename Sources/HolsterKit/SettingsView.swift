@@ -12,9 +12,28 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(store.config?.commands ?? [], id: \.name, selection: $selectedCommand) { command in
-                Text(command.name)
+                HStack(spacing: 9) {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(HolsterTheme.accent)
+                        .frame(width: 22, height: 22)
+                        .background(
+                            HolsterTheme.accent.opacity(0.16),
+                            in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(command.name)
+                            .lineLimit(1)
+                        if let hotkey = command.hotkey, !hotkey.isEmpty {
+                            Text(hotkeyDisplay(hotkey))
+                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+                .padding(.vertical, 3)
             }
-            .navigationSplitViewColumnWidth(min: 160, ideal: 200)
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 250)
             .toolbar {
                 Button {
                     selectedCommand = nil
@@ -40,10 +59,12 @@ struct SettingsView: View {
         .overlay(alignment: .bottom) {
             if showSavedToast {
                 Label("Saved", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(.green)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(.regularMaterial, in: Capsule())
+                    .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
                     .padding(.bottom, 16)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
@@ -62,6 +83,7 @@ struct SettingsView: View {
             KeyboardShortcuts.reset(recorderName)
             store.load()
         }
+        .tint(HolsterTheme.accentDeep)
     }
 
     private func flashSavedToast() {
@@ -73,24 +95,139 @@ struct SettingsView: View {
     }
 
     private var statusBar: some View {
-        HStack(spacing: 12) {
-            Image(systemName: SelectionCapture.hasPermission ? "checkmark.circle" : "xmark.circle")
-                .foregroundStyle(SelectionCapture.hasPermission ? .green : .orange)
+        HStack(spacing: 10) {
+            Circle()
+                .fill(SelectionCapture.hasPermission ? Color.green : Color.orange)
+                .frame(width: 7, height: 7)
             Text(SelectionCapture.hasPermission
                 ? "Accessibility permission granted"
                 : "Accessibility permission required for selection capture")
-                .font(.caption)
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
             if !SelectionCapture.hasPermission {
                 Button("Grant…") { SelectionCapture.requestPermission() }
-                    .controlSize(.small)
+                    .buttonStyle(GhostButtonStyle())
             }
             Spacer()
             Button("Open Config Folder") { NSWorkspace.shared.open(store.directory) }
-                .controlSize(.small)
+                .buttonStyle(GhostButtonStyle())
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
         .background(.bar)
+        .overlay(alignment: .top) {
+            Rectangle().fill(HolsterTheme.hairline).frame(height: 1)
+        }
+    }
+}
+
+/// "cmd+e" from the YAML rendered as the native "⌘E".
+private func hotkeyDisplay(_ hotkey: String) -> String {
+    (try? HotkeyParser.parse(hotkey)).map { "\($0)" } ?? hotkey
+}
+
+private struct SettingsCard<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(spacing: 0) { content }
+            .background(
+                HolsterTheme.card,
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(HolsterTheme.hairline, lineWidth: 1))
+    }
+}
+
+private struct SettingRow<Content: View>: View {
+    let label: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Text(label)
+                .font(.system(size: 13))
+            Spacer(minLength: 12)
+            content
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(minHeight: 44)
+    }
+}
+
+private struct RowDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(HolsterTheme.hairline)
+            .frame(height: 1)
+            .padding(.leading, 14)
+    }
+}
+
+private struct InsetFieldChrome: ViewModifier {
+    let focused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .frame(width: 280)
+            .background(
+                HolsterTheme.inset,
+                in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(
+                        focused ? HolsterTheme.accent.opacity(0.6) : HolsterTheme.hairline,
+                        lineWidth: 1))
+            .animation(.easeOut(duration: 0.12), value: focused)
+    }
+}
+
+extension View {
+    fileprivate func insetField(focused: Bool) -> some View {
+        modifier(InsetFieldChrome(focused: focused))
+    }
+}
+
+/// Custom segmented control: amber pill on the selected chip.
+private struct ReasoningPicker: View {
+    let showNone: Bool
+    @Binding var selection: String
+
+    private var options: [(label: String, value: String)] {
+        (showNone ? [("None", "")] : []) + [("Low", "low"), ("Medium", "medium"), ("High", "high")]
+    }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options, id: \.value) { option in
+                let selected = selection == option.value
+                Button {
+                    selection = option.value
+                } label: {
+                    Text(option.label)
+                        .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? Color.black.opacity(0.8) : Color.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background {
+                            if selected {
+                                Capsule().fill(HolsterTheme.accentGradient)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(HolsterTheme.inset, in: Capsule())
+        .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
+        .animation(.easeOut(duration: 0.15), value: selection)
     }
 }
 
@@ -100,10 +237,15 @@ private struct CommandEditor: View {
     let onSaved: (String) -> Void
 
     @State private var draft = ConfigStore.CommandDraft()
+    /// Snapshot taken after load; Save stays disabled until the draft differs.
+    @State private var savedDraft: ConfigStore.CommandDraft?
     @State private var models: [String] = []
     @State private var modelsError: String?
     @State private var errorMessage: String?
     @State private var confirmDelete = false
+
+    private enum Field { case name, baseURL, apiKey, prompt }
+    @FocusState private var focus: Field?
 
     private var providerNames: [String] {
         var names = Set((store.config?.providers.keys).map(Array.init) ?? [])
@@ -125,83 +267,171 @@ private struct CommandEditor: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                TextField("Name", text: $draft.name, prompt: Text("Grammar Teacher"))
-                LabeledContent("Hotkey") {
-                    KeyboardShortcuts.Recorder(for: recorderName) { shortcut in
-                        draft.hotkey = shortcut.flatMap(HotkeyParser.format) ?? ""
-                        // Recording replaced the scratch value, which
-                        // value-unregisters any command using the old combo.
-                        store.load()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                section("Command") {
+                    SettingsCard {
+                        SettingRow(label: "Name") {
+                            TextField("", text: $draft.name, prompt: Text("Grammar Teacher"))
+                                .font(.system(size: 13))
+                                .focused($focus, equals: .name)
+                                .insetField(focused: focus == .name)
+                        }
+                        RowDivider()
+                        SettingRow(label: "Hotkey") {
+                            KeyboardShortcuts.Recorder(for: recorderName) { shortcut in
+                                draft.hotkey = shortcut.flatMap(HotkeyParser.format) ?? ""
+                                // Recording replaced the scratch value, which
+                                // value-unregisters any command using the old combo.
+                                store.load()
+                            }
+                        }
                     }
+                }
+                section("Provider & Model") {
+                    SettingsCard {
+                        SettingRow(label: "Provider") {
+                            Picker("", selection: providerBinding) {
+                                ForEach(providerNames, id: \.self) {
+                                    Text(providerLabel($0)).tag($0)
+                                }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+                        if draft.provider == ProviderPreset.custom {
+                            RowDivider()
+                            SettingRow(label: "Base URL") {
+                                TextField("", text: $draft.baseURL,
+                                          prompt: Text("https://openrouter.ai/api/v1"))
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .focused($focus, equals: .baseURL)
+                                    .insetField(focused: focus == .baseURL)
+                            }
+                        }
+                        if isPresetProvider {
+                            RowDivider()
+                            SettingRow(label: "API Key") {
+                                TextField("", text: $draft.apiKey, prompt: Text("sk-…"))
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .focused($focus, equals: .apiKey)
+                                    .onSubmit { fetchModels() }
+                                    .insetField(focused: focus == .apiKey)
+                            }
+                        }
+                        RowDivider()
+                        SettingRow(label: "Model") {
+                            Picker("", selection: $draft.model) {
+                                if !models.contains(draft.model), !draft.model.isEmpty {
+                                    Text(draft.model).tag(draft.model)
+                                }
+                                ForEach(models, id: \.self) { Text($0).tag($0) }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+                        if let modelsError {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.orange)
+                                Text("Couldn't load models: \(modelsError)")
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(.orange)
+                                    .lineLimit(2)
+                                Spacer()
+                                Button("Retry") { fetchModels() }
+                                    .buttonStyle(GhostButtonStyle())
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 10)
+                        }
+                        RowDivider()
+                        SettingRow(label: "Reasoning") {
+                            ReasoningPicker(
+                                showNone: draft.provider != ProviderPreset.openCodeGo,
+                                selection: $draft.reasoning)
+                        }
+                        RowDivider()
+                        SettingRow(label: "Auto-copy selected text in result window") {
+                            Toggle("", isOn: $draft.copyOnSelect)
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                        }
+                    }
+                }
+                section("Prompt", note: "{selection} is replaced with the selected text") {
+                    TextEditor(text: $draft.promptText)
+                        .font(.system(size: 12.5, design: .monospaced))
+                        .lineSpacing(3)
+                        .scrollContentBackground(.hidden)
+                        .focused($focus, equals: .prompt)
+                        .padding(10)
+                        .frame(minHeight: 240)
+                        .background(
+                            HolsterTheme.inset,
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(
+                                    focus == .prompt
+                                        ? HolsterTheme.accent.opacity(0.6) : HolsterTheme.hairline,
+                                    lineWidth: 1))
                 }
             }
-            Section {
-                Picker("Provider", selection: providerBinding) {
-                    ForEach(providerNames, id: \.self) { Text(providerLabel($0)).tag($0) }
-                }
-                if draft.provider == ProviderPreset.custom {
-                    TextField("Base URL", text: $draft.baseURL,
-                              prompt: Text("https://openrouter.ai/api/v1"))
-                        .font(.callout.monospaced())
-                }
-                if isPresetProvider {
-                    TextField("API Key", text: $draft.apiKey, prompt: Text("sk-…"))
-                        .font(.callout.monospaced())
-                        .onSubmit { fetchModels() }
-                }
-                Picker("Model", selection: $draft.model) {
-                    if !models.contains(draft.model), !draft.model.isEmpty {
-                        Text(draft.model).tag(draft.model)
-                    }
-                    ForEach(models, id: \.self) { Text($0).tag($0) }
-                }
-                if let modelsError {
-                    HStack {
-                        Text("Couldn't load models: \(modelsError)")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .lineLimit(2)
-                        Spacer()
-                        Button("Retry") { fetchModels() }
-                            .controlSize(.small)
-                    }
-                }
-                Picker("Reasoning", selection: $draft.reasoning) {
-                    if draft.provider != ProviderPreset.openCodeGo {
-                        Text("None").tag("")
-                    }
-                    Text("Low").tag("low")
-                    Text("Medium").tag("medium")
-                    Text("High").tag("high")
-                }
-                Toggle("Auto-copy selected text in result window", isOn: $draft.copyOnSelect)
-            }
-            Section("Prompt — {selection} is replaced with the selected text") {
-                TextEditor(text: $draft.promptText)
-                    .font(.body.monospaced())
-                    .frame(minHeight: 220)
-            }
+            .padding(24)
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity)
         }
-        .formStyle(.grouped)
+        .background(HolsterTheme.windowBackground.ignoresSafeArea())
         .navigationTitle(originalName ?? "New Command")
         .toolbar {
-            if originalName != nil {
-                ToolbarItem(placement: .destructiveAction) {
-                    Button(role: .destructive) {
-                        confirmDelete = true
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
-            }
+            // One item for both buttons: separate placements get squeezed
+            // into a shared glass group and the pills overlap.
             ToolbarItem(placement: .primaryAction) {
-                Button { save() } label: {
-                    Text("Save").padding(.horizontal, 10)
+                HStack(spacing: 10) {
+                    if originalName != nil {
+                        Button(role: .destructive) {
+                            confirmDelete = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                                .labelStyle(.iconOnly)
+                        }
+                        .buttonStyle(GhostButtonStyle(tint: Color(hex: 0xFF6B5E)))
+                        .help("Delete command")
+                    }
+                    Button {
+                        save()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text("Save")
+                            Text("⌘S")
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(.black.opacity(0.45))
+                        }
+                    }
+                    .keyboardShortcut("s", modifiers: .command)
+                    .buttonStyle(AccentButtonStyle())
+                    .disabled(draft == savedDraft)
                 }
-                .keyboardShortcut("s", modifiers: .command)
-                .buttonStyle(.borderedProminent)
+                // Breathing room against the toolbar's glass group edges;
+                // the group hugs the trailing pill tighter than the leading one.
+                .padding(.leading, 6)
+                .padding(.trailing, 12)
+            }
+        }
+        // Plain-style TextFields only commit their binding on end-editing;
+        // mirror keystrokes so the Save dirty-check tracks live text.
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSControl.textDidChangeNotification)
+        ) { note in
+            guard let field = note.object as? NSTextField else { return }
+            switch focus {
+            case .name: draft.name = field.stringValue
+            case .baseURL: draft.baseURL = field.stringValue
+            case .apiKey: draft.apiKey = field.stringValue
+            default: break
             }
         }
         .alert("Delete \"\(originalName ?? "")\"?", isPresented: $confirmDelete) {
@@ -221,6 +451,26 @@ private struct CommandEditor: View {
         .onAppear(perform: loadDraft)
     }
 
+    private func section(
+        _ title: String, note: String? = nil, @ViewBuilder content: () -> some View
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
+                if let note {
+                    Text(note)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.leading, 2)
+            content()
+        }
+    }
+
     private func loadDraft() {
         if let originalName, let command = store.command(named: originalName) {
             draft = store.draft(for: command)
@@ -236,6 +486,7 @@ private struct CommandEditor: View {
         // (e.g. the previously selected command's hotkey); re-assert them all.
         store.load()
         syncProviderFields()
+        savedDraft = draft
         fetchModels()
     }
 
@@ -310,6 +561,8 @@ private struct CommandEditor: View {
     private func save() {
         do {
             try store.saveCommand(originalName: originalName, draft: draft)
+            // Same-name saves don't rebuild the editor, so re-disable here.
+            savedDraft = draft
             onSaved(draft.name)
         } catch {
             errorMessage = error.localizedDescription

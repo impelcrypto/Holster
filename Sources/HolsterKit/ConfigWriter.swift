@@ -21,7 +21,7 @@ extension CommandConfig {
 /// GUI edits write back to the same files the user can edit by hand.
 /// Note: YAML comments do not survive a GUI save (the file is re-serialized).
 extension ConfigStore {
-    public struct CommandDraft {
+    public struct CommandDraft: Equatable {
         public var name: String
         public var hotkey: String
         public var provider: String

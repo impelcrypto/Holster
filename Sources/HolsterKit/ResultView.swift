@@ -26,6 +26,32 @@ private struct ContentHeightKey: PreferenceKey {
     }
 }
 
+/// Blurred backdrop for the floating panel. The panel never activates the
+/// app, so without an explicit .active state the blur renders flat.
+private struct PanelBackdrop: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+}
+
+private struct PulsingDot: View {
+    @State private var dimmed = false
+
+    var body: some View {
+        Circle()
+            .fill(HolsterTheme.accent)
+            .frame(width: 7, height: 7)
+            .opacity(dimmed ? 0.25 : 1)
+            .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: dimmed)
+            .onAppear { dimmed = true }
+    }
+}
+
 struct ResultView: View {
     @ObservedObject var model: RunViewModel
     var onContentHeight: (CGFloat) -> Void = { _ in }
@@ -33,45 +59,56 @@ struct ResultView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
+            hairline
             content
-            Divider()
+            hairline
             footer
         }
         .frame(minWidth: 520, minHeight: 160)
+        .background(PanelBackdrop().ignoresSafeArea())
         .overlay(alignment: .bottom) {
             if let toast = model.toast {
                 Label(toast, systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(.green)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(.regularMaterial, in: Capsule())
-                    .padding(.bottom, 54)
+                    .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
+                    .padding(.bottom, 56)
                     .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.15), value: model.toast)
+        .tint(HolsterTheme.accentDeep)
+    }
+
+    private var hairline: some View {
+        Rectangle().fill(HolsterTheme.hairline).frame(height: 1)
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text(model.commandName).font(.headline)
+            Text(model.commandName)
+                .font(.system(size: 14, weight: .semibold))
             Text(model.modelName)
-                .font(.caption)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(Color.white.opacity(0.07), in: Capsule())
+                .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
             Spacer()
             if model.state == .capturing || model.state == .streaming {
-                if model.isReasoning, model.markdown.isEmpty {
-                    Text("Reasoning…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                ProgressView().controlSize(.small)
+                Text(model.isReasoning && model.markdown.isEmpty ? "Reasoning…" : "Generating…")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                PulsingDot()
             }
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)
-        .padding(.bottom, 8)
+        .padding(.bottom, 10)
     }
 
     @ViewBuilder
@@ -121,22 +158,43 @@ struct ResultView: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             if case .failed = model.state {
-                Button("Retry") { model.onRetry?() }
-                    .keyboardShortcut("r", modifiers: .command)
+                Button {
+                    model.onRetry?()
+                } label: {
+                    HStack(spacing: 5) {
+                        Text("Retry")
+                        Text("⌘R")
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .buttonStyle(GhostButtonStyle())
+                .keyboardShortcut("r", modifiers: .command)
             }
             Spacer()
             Button("Speak") { model.onSpeak?(model.smartCopyText) }
+                .buttonStyle(GhostButtonStyle())
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(model.state != .done)
             Button("Copy All") { copy(model.fullText, closing: false) }
+                .buttonStyle(GhostButtonStyle())
                 .keyboardShortcut(.return, modifiers: [.command, .shift])
                 .disabled(model.fullText.isEmpty)
-            Button("Copy") { copy(model.smartCopyText, closing: true) }
-                .keyboardShortcut(.return, modifiers: .command)
-                .buttonStyle(.borderedProminent)
-                .disabled(model.state != .done)
+            Button {
+                copy(model.smartCopyText, closing: true)
+            } label: {
+                HStack(spacing: 5) {
+                    Text("Copy")
+                    Text("⌘↩")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.black.opacity(0.45))
+                }
+            }
+            .buttonStyle(AccentButtonStyle())
+            .keyboardShortcut(.return, modifiers: .command)
+            .disabled(model.state != .done)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
