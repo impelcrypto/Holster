@@ -5,21 +5,31 @@ cd "$(dirname "$0")/.."
 APP_NAME="Holster"
 BUNDLE_ID="app.holster"
 VERSION="0.1.0"
-BUILD_DIR="build"
+# .noindex keeps Spotlight from listing the built .app as a second Holster.
+BUILD_DIR="build.noindex"
 APP="$BUILD_DIR/$APP_NAME.app"
 
-swift build -c release
+# Must build with xcodebuild, not `swift build`: the swift-build variant of
+# the generated Bundle.module accessor never looks in Contents/Resources —
+# only the app root (codesign forbids putting bundles there) and an absolute
+# path into the build directory, which breaks after `make clean` or moving
+# the repo. Xcode's accessor checks Bundle.main.resourceURL, so the layout
+# below works everywhere.
+PRODUCTS="$BUILD_DIR/DerivedData/Build/Products/Release"
+xcodebuild -scheme holster -configuration Release \
+    -derivedDataPath "$BUILD_DIR/DerivedData" \
+    -destination 'platform=macOS' build
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp ".build/release/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
+cp "$PRODUCTS/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 
-# SPM resource bundles (KeyboardShortcuts localization etc.) must ship in
-# Resources, otherwise Bundle.module fatalErrors at launch. Globbing (not
-# find) because .build/release is a symlink find won't follow.
-for bundle in .build/release/*.bundle; do
+for bundle in "$PRODUCTS"/*.bundle; do
     [ -e "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
 done
+
+# Regenerate with scripts/icons.sh after changing assets/*.svg.
+cp assets/AppIcon.icns "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -32,6 +42,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundleVersion</key><string>$VERSION</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>

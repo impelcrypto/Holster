@@ -20,7 +20,11 @@ let package = Package(
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
                 "Yams",
             ],
-            resources: [.copy("Resources/examples")],
+            resources: [
+                .copy("Resources/examples"),
+                .copy("Resources/MenuBarIcon.png"),
+                .copy("Resources/MenuBarIcon@2x.png"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(

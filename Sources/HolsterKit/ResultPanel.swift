@@ -40,28 +40,32 @@ final class ResultPanel: NSPanel {
         NotificationCenter.default.addObserver(
             self, selector: #selector(frameDidResize), name: NSWindow.didResizeNotification, object: self)
 
-        mouseMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
-        ) { [weak self] event in
-            self?.handleMouse(event)
+        // Only mouseDown is observable here: SwiftUI's text-selection gesture
+        // runs a mouse-tracking loop that swallows the dragged/up events
+        // before they reach local monitors. The drag end is detected by
+        // polling the button state instead.
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+            self?.handleMouseDown(event)
             return event
         }
     }
 
-    private func handleMouse(_ event: NSEvent) {
-        guard event.window === self else { return }
-        switch event.type {
-        case .leftMouseDown:
-            draggingSelection = false
-        case .leftMouseDragged:
-            draggingSelection = true
-        case .leftMouseUp:
-            if draggingSelection, autoCopyOnSelect {
-                draggingSelection = false
-                copySelectionIfAny()
+    private func handleMouseDown(_ event: NSEvent) {
+        guard event.window === self, autoCopyOnSelect, !draggingSelection else { return }
+        draggingSelection = true
+        let start = NSEvent.mouseLocation
+        Task { @MainActor [weak self] in
+            var moved = false
+            while NSEvent.pressedMouseButtons & 1 == 1 {
+                let now = NSEvent.mouseLocation
+                if hypot(now.x - start.x, now.y - start.y) > 4 { moved = true }
+                try? await Task.sleep(for: .milliseconds(40))
             }
-        default:
-            break
+            guard let self else { return }
+            self.draggingSelection = false
+            if moved, self.isVisible {
+                self.copySelectionIfAny()
+            }
         }
     }
 

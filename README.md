@@ -22,7 +22,7 @@ floating markdown popup. Press ⌘↩ to copy the corrected sentence and close.
 Requires Xcode (Swift 6+). No Xcode project — everything builds with SPM.
 
 ```sh
-make app       # build Holster.app into ./build
+make app       # build Holster.app into ./build.noindex
 make install   # copy to /Applications and launch
 make test      # unit tests
 ```

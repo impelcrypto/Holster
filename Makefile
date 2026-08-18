@@ -1,10 +1,14 @@
 APP_NAME = Holster
-BUILD_DIR = build
+# .noindex keeps Spotlight from listing the built .app as a second Holster.
+BUILD_DIR = build.noindex
 
-.PHONY: app install test run clean
+.PHONY: app install test run clean icons
 
 app:
 	./scripts/bundle.sh
+
+icons:
+	./scripts/icons.sh
 
 install: app
 	@killall "$(APP_NAME)" 2>/dev/null || true

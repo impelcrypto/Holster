@@ -28,13 +28,24 @@ struct HolsterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @ObservedObject private var store = AppState.shared.store
 
+    // Template image: the menu bar recolors it for light/dark/highlight.
+    private static let menuBarIcon: NSImage = {
+        guard let image = Bundle.module.image(forResource: "MenuBarIcon") else {
+            fatalError("MenuBarIcon.png missing from HolsterKit bundle")
+        }
+        image.isTemplate = true
+        return image
+    }()
+
     var body: some Scene {
         MenuBarExtra {
             MenuContent(store: store)
         } label: {
-            Image(systemName: store.lastError == nil
-                ? "textformat.abc.dottedunderline"
-                : "exclamationmark.triangle")
+            if store.lastError == nil {
+                Image(nsImage: Self.menuBarIcon)
+            } else {
+                Image(systemName: "exclamationmark.triangle")
+            }
         }
 
         Window("Holster Settings", id: "settings") {

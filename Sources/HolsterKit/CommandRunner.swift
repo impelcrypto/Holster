@@ -56,6 +56,12 @@ public final class CommandRunner {
             if let presetSelection {
                 selection = presetSelection
             } else {
+                // Re-trigger while our panel holds key focus (⌘E again, Retry):
+                // hide it so orderOut hands key back to the user's app first.
+                if panel.isKeyWindow {
+                    panel.orderOut(nil)
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
                 selection = try await SelectionCapture.capture()
             }
             guard !Task.isCancelled else { return }

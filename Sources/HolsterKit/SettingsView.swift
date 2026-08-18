@@ -7,6 +7,7 @@ private let recorderName = KeyboardShortcuts.Name("settings.recorder.scratch")
 struct SettingsView: View {
     @ObservedObject var store: ConfigStore
     @State private var selectedCommand: String?
+    @State private var showSavedToast = false
 
     var body: some View {
         NavigationSplitView {
@@ -25,12 +26,34 @@ struct SettingsView: View {
             CommandEditor(
                 store: store,
                 originalName: selectedCommand,
-                onSaved: { name in selectedCommand = name })
+                onSaved: { name in
+                    // Empty name means a delete, not a save.
+                    selectedCommand = name.isEmpty ? nil : name
+                    if !name.isEmpty { flashSavedToast() }
+                })
             // Rebuild the editor whenever another command is picked.
             .id(selectedCommand ?? "\u{2205}new")
         }
         .frame(minWidth: 760, minHeight: 520)
+        // Overlay must come before the safeAreaInset so the toast sits above
+        // the status bar instead of behind it.
+        .overlay(alignment: .bottom) {
+            if showSavedToast {
+                Label("Saved", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.regularMaterial, in: Capsule())
+                    .padding(.bottom, 16)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
         .safeAreaInset(edge: .bottom) { statusBar }
+        .onAppear {
+            if selectedCommand == nil {
+                selectedCommand = store.config?.commands.first?.name
+            }
+        }
         // The scratch recorder shortcut must not stay registered globally once
         // the settings window closes. KeyboardShortcuts unregisters by VALUE,
         // not by name, so this also kills any command sharing the same combo;
@@ -38,6 +61,14 @@ struct SettingsView: View {
         .onDisappear {
             KeyboardShortcuts.reset(recorderName)
             store.load()
+        }
+    }
+
+    private func flashSavedToast() {
+        withAnimation { showSavedToast = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            withAnimation { showSavedToast = false }
         }
     }
 
@@ -72,7 +103,6 @@ private struct CommandEditor: View {
     @State private var models: [String] = []
     @State private var errorMessage: String?
     @State private var confirmDelete = false
-    @State private var showSavedToast = false
 
     private var providerNames: [String] {
         (store.config?.providers.keys).map(Array.init)?.sorted() ?? []
@@ -116,29 +146,24 @@ private struct CommandEditor: View {
             }
         }
         .formStyle(.grouped)
-        .overlay(alignment: .bottom) {
-            if showSavedToast {
-                Label("Saved", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(.bottom, 16)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-        }
         .navigationTitle(originalName ?? "New Command")
         .toolbar {
             if originalName != nil {
-                Button(role: .destructive) {
-                    confirmDelete = true
-                } label: {
-                    Label("Delete", systemImage: "trash")
+                ToolbarItem(placement: .destructiveAction) {
+                    Button(role: .destructive) {
+                        confirmDelete = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
-            Button("Save") { save() }
+            ToolbarItem(placement: .primaryAction) {
+                Button { save() } label: {
+                    Text("Save").padding(.horizontal, 10)
+                }
                 .keyboardShortcut("s", modifiers: .command)
                 .buttonStyle(.borderedProminent)
+            }
         }
         .alert("Delete \"\(originalName ?? "")\"?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) { delete() }
@@ -189,11 +214,6 @@ private struct CommandEditor: View {
         do {
             try store.saveCommand(originalName: originalName, draft: draft)
             onSaved(draft.name)
-            withAnimation { showSavedToast = true }
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1.5))
-                withAnimation { showSavedToast = false }
-            }
         } catch {
             errorMessage = error.localizedDescription
         }
