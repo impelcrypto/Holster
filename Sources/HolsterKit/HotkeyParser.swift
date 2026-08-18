@@ -45,7 +45,7 @@ public enum HotkeyParser {
         let parts = string.lowercased()
             .split(separator: "+")
             .map { $0.trimmingCharacters(in: .whitespaces) }
-        guard let keyName = parts.last, parts.count >= 1, !keyName.isEmpty else {
+        guard let keyName = parts.last, !keyName.isEmpty else {
             throw ParseError(message: "Empty hotkey")
         }
         guard let key = keyNames[keyName] else {

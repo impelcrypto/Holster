@@ -25,16 +25,12 @@ public enum SmartCopy {
 
     // MARK: - Internals
 
+    /// Each line stays its own entry so table rows never merge into prose.
     private static func split(_ markdown: String) -> [String] {
         markdown
-            .components(separatedBy: "\n\n")
-            .flatMap { $0.components(separatedBy: "\n") }
-            .reduce(into: [String]()) { result, line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                if trimmed.isEmpty { return }
-                // Table rows and heading/divider lines never join a paragraph.
-                result.append(trimmed)
-            }
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     private static func isStructural(_ line: String) -> Bool {

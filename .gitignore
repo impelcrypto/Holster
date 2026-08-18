@@ -3,3 +3,4 @@ build.noindex/
 .swiftpm/
 .DS_Store
 *.xcodeproj
+*.profraw

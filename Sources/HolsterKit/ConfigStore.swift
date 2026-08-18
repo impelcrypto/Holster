@@ -106,17 +106,15 @@ public final class ConfigStore: ObservableObject {
 
 final class DirectoryWatcher {
     private let source: DispatchSourceFileSystemObject
-    private let descriptor: Int32
 
     init?(url: URL, onChange: @escaping @Sendable () -> Void) {
-        descriptor = open(url.path, O_EVTONLY)
-        guard descriptor >= 0 else { return nil }
+        let fd = open(url.path, O_EVTONLY)
+        guard fd >= 0 else { return nil }
         source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: descriptor,
+            fileDescriptor: fd,
             eventMask: [.write, .rename, .delete, .extend],
             queue: .global(qos: .utility))
         source.setEventHandler(handler: onChange)
-        let fd = descriptor
         source.setCancelHandler { close(fd) }
         source.resume()
     }

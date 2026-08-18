@@ -17,6 +17,8 @@ public final class Speaker {
             if let config, let baseURL = config.baseURL, !baseURL.isEmpty {
                 do {
                     let data = try await fetchAudio(text: text, baseURL: baseURL, config: config)
+                    // A newer speak()/stop() may have superseded this task mid-fetch.
+                    guard !Task.isCancelled else { return }
                     player = try AVAudioPlayer(data: data)
                     player?.play()
                     return
