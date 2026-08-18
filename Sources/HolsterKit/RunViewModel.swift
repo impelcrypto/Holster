@@ -1,0 +1,82 @@
+import Foundation
+
+@MainActor
+public final class RunViewModel: ObservableObject {
+    public enum State: Equatable {
+        case capturing
+        case streaming
+        case done
+        case failed(String)
+    }
+
+    @Published public private(set) var markdown = ""
+    @Published public private(set) var state: State = .capturing
+    @Published public private(set) var toast: String?
+
+    public let commandName: String
+    public let modelName: String
+
+    /// The captured selection; smart copy falls back to it and retry reuses it.
+    public var selection: String?
+
+    public var onRetry: (() -> Void)?
+    public var onSpeak: ((String) -> Void)?
+    public var onCopied: (() -> Void)?
+
+    private var accumulated = ""
+    private var flushScheduled = false
+    private var toastTask: Task<Void, Never>?
+
+    public func flashToast(_ message: String) {
+        toast = message
+        toastTask?.cancel()
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(1400))
+            guard !Task.isCancelled else { return }
+            self?.toast = nil
+        }
+    }
+
+    public init(command: CommandConfig) {
+        commandName = command.name
+        modelName = command.model
+    }
+
+    public func beginStreaming() {
+        state = .streaming
+    }
+
+    /// MarkdownUI re-parses the whole document on every update, so deltas are
+    /// coalesced to ~10 renders/second.
+    public func append(_ chunk: String) {
+        accumulated += chunk
+        guard !flushScheduled else { return }
+        flushScheduled = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(100))
+            guard let self else { return }
+            self.flushScheduled = false
+            self.markdown = self.accumulated
+        }
+    }
+
+    public func finish() {
+        markdown = accumulated
+        state = .done
+    }
+
+    public func fail(_ message: String) {
+        markdown = accumulated
+        state = .failed(message)
+    }
+
+    public var smartCopyText: String {
+        SmartCopy.extract(from: accumulated.isEmpty ? markdown : accumulated)
+            ?? selection
+            ?? markdown
+    }
+
+    public var fullText: String {
+        accumulated.isEmpty ? markdown : accumulated
+    }
+}

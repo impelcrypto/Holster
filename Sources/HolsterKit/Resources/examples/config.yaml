@@ -1,0 +1,30 @@
+# Holster configuration
+# Docs: https://github.com/impelcrypto/Holster (see README)
+#
+# providers: any OpenAI-compatible endpoint (CLIProxyAPI, Ollama, OpenAI, ...)
+
+providers:
+  cliproxy:
+    base_url: http://127.0.0.1:8317/v1
+    api_key: ""            # only if your proxy requires one
+  ollama:
+    base_url: http://127.0.0.1:11434/v1
+
+default_provider: cliproxy
+
+# Optional high-quality TTS via an OpenAI-compatible /audio/speech endpoint.
+# Leave base_url empty to use the built-in macOS voice instead.
+tts:
+  base_url: ""
+  api_key: ""
+  model: gpt-4o-mini-tts
+  voice: alloy
+
+commands:
+  - name: Grammar Teacher
+    hotkey: cmd+shift+g
+    prompt: grammar.md     # file under prompts/, {selection} gets replaced
+    provider: cliproxy
+    model: gpt-5.6-sol
+    temperature: 0
+    stream: true
