@@ -109,6 +109,7 @@ struct ResultView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
+                .padding(.bottom, 12)
                 .background(GeometryReader { proxy in
                     Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
                 })

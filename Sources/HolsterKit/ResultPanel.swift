@@ -116,7 +116,9 @@ final class ResultPanel: NSPanel {
     /// to 70% of the screen; beyond that the content scrolls.
     func adjustContentHeight(_ contentHeight: CGFloat) {
         guard !userResizedPanel else { return }
-        let chrome: CGFloat = 92  // header + footer + dividers
+        // header + footer + dividers, plus the titlebar safe-area inset that
+        // fullSizeContentView pushes the content below.
+        let chrome: CGFloat = 92 + (contentView?.safeAreaInsets.top ?? 28)
         let screenHeight = (screen ?? NSScreen.main)?.visibleFrame.height ?? 800
         let target = min(max(contentHeight + chrome, 220), screenHeight * 0.7)
         guard abs(target - frame.height) > 4 else { return }
