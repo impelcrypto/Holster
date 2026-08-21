@@ -76,18 +76,34 @@ public final class CommandRunner {
             }
             let (providerName, provider) = try config.resolveProvider(for: command)
             let clipboard = NSPasteboard.general.string(forType: .string)
+            let prompt = PromptTemplate.render(template, selection: selection, clipboard: clipboard)
             let request = LLMRequest(
                 baseURL: provider.baseURL,
                 apiKey: provider.apiKey,
                 model: command.model,
-                prompt: PromptTemplate.render(template, selection: selection, clipboard: clipboard),
-                reasoningEffort: command.resolvedReasoning(providerName: providerName))
+                prompt: prompt,
+                reasoningEffort: command.resolvedReasoning(
+                    providerName: providerName, model: command.model))
+            let fallback = config.resolveFallback(for: command)
+            let fallbackRequest = fallback.map {
+                LLMRequest(
+                    baseURL: $0.provider.baseURL,
+                    apiKey: $0.provider.apiKey,
+                    model: $0.model,
+                    prompt: prompt,
+                    reasoningEffort: command.resolvedReasoning(
+                        providerName: $0.name, model: $0.model))
+            }
 
-            for try await event in LLMClient.stream(request) {
+            for try await event in LLMClient.streamWithFallback(request, fallback: fallbackRequest) {
                 guard !Task.isCancelled else { return }
                 switch event {
                 case .reasoning: viewModel.noteReasoning()
                 case .content(let chunk): viewModel.append(chunk)
+                case .fallback:
+                    if let fallback {
+                        viewModel.noteFallback(providerName: fallback.name, model: fallback.model)
+                    }
                 }
             }
             viewModel.finish()

@@ -9,12 +9,13 @@ public enum ProviderPreset {
 }
 
 extension CommandConfig {
-    /// Every model OpenCode Go serves today thinks by default, so an absent
-    /// reasoning field means full-thinking latency, not "no reasoning" —
-    /// fall back to low there instead.
-    // ponytail: provider-level heuristic; per-model table if Go adds non-thinkers
-    public func resolvedReasoning(providerName: String) -> String? {
-        reasoning ?? (providerName == ProviderPreset.openCodeGo ? "low" : nil)
+    /// An absent reasoning field is not "no thinking": OpenCode Go models and
+    /// GPT-5.x think by default, so map nil to "low" / "none" (Instant) there.
+    // ponytail: name-prefix heuristics; per-model table if the model zoo grows
+    public func resolvedReasoning(providerName: String, model: String) -> String? {
+        if let reasoning { return reasoning }
+        if providerName == ProviderPreset.openCodeGo { return "low" }
+        return model.hasPrefix("gpt-5") ? "none" : nil
     }
 }
 
@@ -34,6 +35,9 @@ extension ConfigStore {
         public var copyOnSelect: Bool
         public var promptFile: String
         public var promptText: String
+        /// "" = no fallback; the model only applies when a provider is set.
+        public var fallbackProvider: String
+        public var fallbackModel: String
 
         public init(
             name: String = "",
@@ -45,7 +49,9 @@ extension ConfigStore {
             apiKey: String = "",
             copyOnSelect: Bool = false,
             promptFile: String = "",
-            promptText: String = ""
+            promptText: String = "",
+            fallbackProvider: String = "",
+            fallbackModel: String = ""
         ) {
             self.name = name
             self.hotkey = hotkey
@@ -57,6 +63,8 @@ extension ConfigStore {
             self.copyOnSelect = copyOnSelect
             self.promptFile = promptFile
             self.promptText = promptText
+            self.fallbackProvider = fallbackProvider
+            self.fallbackModel = fallbackModel
         }
     }
 
@@ -73,7 +81,9 @@ extension ConfigStore {
             apiKey: provider?.apiKey ?? "",
             copyOnSelect: command.wantsCopyOnSelect,
             promptFile: command.prompt,
-            promptText: (try? promptText(for: command)) ?? "")
+            promptText: (try? promptText(for: command)) ?? "",
+            fallbackProvider: command.fallbackProvider ?? "",
+            fallbackModel: command.fallbackModel ?? "")
     }
 
     /// Saves a draft as command `originalName` (nil = new command), writing
@@ -109,6 +119,7 @@ extension ConfigStore {
         }
 
         let promptFile = draft.promptFile.isEmpty ? slugify(name) + ".md" : draft.promptFile
+        let hasFallback = !draft.fallbackProvider.isEmpty
         let command = CommandConfig(
             name: name,
             hotkey: draft.hotkey.isEmpty ? nil : draft.hotkey,
@@ -116,7 +127,9 @@ extension ConfigStore {
             provider: draft.provider.isEmpty ? nil : draft.provider,
             model: draft.model.trimmingCharacters(in: .whitespaces),
             reasoning: draft.reasoning.isEmpty ? nil : draft.reasoning,
-            copyOnSelect: draft.copyOnSelect ? true : nil)
+            copyOnSelect: draft.copyOnSelect ? true : nil,
+            fallbackProvider: hasFallback ? draft.fallbackProvider : nil,
+            fallbackModel: hasFallback && !draft.fallbackModel.isEmpty ? draft.fallbackModel : nil)
 
         if let originalName, let index = config.commands.firstIndex(where: { $0.name == originalName }) {
             config.commands[index] = command
@@ -130,6 +143,18 @@ extension ConfigStore {
             to: promptsDirectory.appendingPathComponent(promptFile),
             atomically: true,
             encoding: .utf8)
+        try write(config)
+    }
+
+    /// Persists the Speak voice picked on the General screen (Edge provider).
+    public func saveTTS(voice: String) throws {
+        guard var config else {
+            throw ConfigError.validation("Fix config.yaml before editing settings in the GUI")
+        }
+        var tts = config.tts ?? TTSConfig()
+        tts.provider = "edge"
+        tts.voice = voice
+        config.tts = tts
         try write(config)
     }
 

@@ -52,12 +52,15 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.commands[0].name, "X")
     }
 
-    func testReasoningFallsBackToLowOnOpenCodeGo() {
+    func testReasoningDefaults() {
         let command = CommandConfig(name: "X", prompt: "x.md", model: "m")
-        XCTAssertEqual(command.resolvedReasoning(providerName: "opencode-go"), "low")
-        XCTAssertNil(command.resolvedReasoning(providerName: "cliproxy"))
+        XCTAssertEqual(command.resolvedReasoning(providerName: "opencode-go", model: "m"), "low")
+        XCTAssertNil(command.resolvedReasoning(providerName: "cliproxy", model: "m"))
+        XCTAssertEqual(
+            command.resolvedReasoning(providerName: "cliproxy", model: "gpt-5.6-terra"), "none")
         let explicit = CommandConfig(name: "X", prompt: "x.md", model: "m", reasoning: "high")
-        XCTAssertEqual(explicit.resolvedReasoning(providerName: "opencode-go"), "high")
+        XCTAssertEqual(
+            explicit.resolvedReasoning(providerName: "cliproxy", model: "gpt-5.6-terra"), "high")
     }
 
     func testInvalidReasoningFails() {
@@ -156,5 +159,47 @@ final class ConfigTests: XCTestCase {
           - name: X
             prompt: x.md
         """))
+    }
+
+    func testUnknownFallbackProviderFails() {
+        XCTAssertThrowsError(try Config.parse(yaml: """
+        providers:
+          a:
+            base_url: http://localhost:1/v1
+        commands:
+          - name: X
+            prompt: x.md
+            model: m
+            fallback_provider: nope
+        """))
+    }
+
+    func testResolveFallbackDefaultsToPrimaryModel() throws {
+        let config = try Config.parse(yaml: """
+        providers:
+          a:
+            base_url: http://localhost:1/v1
+          b:
+            base_url: http://localhost:2/v1
+        default_provider: a
+        commands:
+          - name: X
+            prompt: x.md
+            model: m
+            fallback_provider: b
+          - name: Y
+            prompt: y.md
+            model: m
+            fallback_provider: b
+            fallback_model: m2
+          - name: Z
+            prompt: z.md
+            model: m
+        """)
+        let x = try XCTUnwrap(config.resolveFallback(for: config.commands[0]))
+        XCTAssertEqual(x.name, "b")
+        XCTAssertEqual(x.model, "m")
+        XCTAssertEqual(config.resolveFallback(for: config.commands[1])?.model, "m2")
+        XCTAssertNil(config.resolveFallback(for: config.commands[2]))
     }
 }

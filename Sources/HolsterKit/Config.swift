@@ -17,19 +17,23 @@ public struct ProviderConfig: Codable, Equatable {
 }
 
 public struct TTSConfig: Codable, Equatable {
+    /// "edge" for free Microsoft Edge TTS; otherwise base_url (OpenAI) or built-in.
+    public var provider: String?
     public var baseURL: String?
     public var apiKey: String?
     public var model: String?
     public var voice: String?
 
     enum CodingKeys: String, CodingKey {
+        case provider
         case baseURL = "base_url"
         case apiKey = "api_key"
         case model
         case voice
     }
 
-    public init(baseURL: String? = nil, apiKey: String? = nil, model: String? = nil, voice: String? = nil) {
+    public init(provider: String? = nil, baseURL: String? = nil, apiKey: String? = nil, model: String? = nil, voice: String? = nil) {
+        self.provider = provider
         self.baseURL = baseURL
         self.apiKey = apiKey
         self.model = model
@@ -48,6 +52,9 @@ public struct CommandConfig: Codable, Equatable, Identifiable {
     public var reasoning: String?
     /// Selecting text in the result window copies it automatically.
     public var copyOnSelect: Bool?
+    /// Used when the primary provider fails before any content arrives.
+    public var fallbackProvider: String?
+    public var fallbackModel: String?
 
     public var id: String { name }
     public var wantsCopyOnSelect: Bool { copyOnSelect ?? false }
@@ -55,6 +62,8 @@ public struct CommandConfig: Codable, Equatable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case name, hotkey, prompt, provider, model, reasoning
         case copyOnSelect = "copy_on_select"
+        case fallbackProvider = "fallback_provider"
+        case fallbackModel = "fallback_model"
     }
 
     public init(
@@ -64,7 +73,9 @@ public struct CommandConfig: Codable, Equatable, Identifiable {
         provider: String? = nil,
         model: String,
         reasoning: String? = nil,
-        copyOnSelect: Bool? = nil
+        copyOnSelect: Bool? = nil,
+        fallbackProvider: String? = nil,
+        fallbackModel: String? = nil
     ) {
         self.name = name
         self.hotkey = hotkey
@@ -73,6 +84,8 @@ public struct CommandConfig: Codable, Equatable, Identifiable {
         self.model = model
         self.reasoning = reasoning
         self.copyOnSelect = copyOnSelect
+        self.fallbackProvider = fallbackProvider
+        self.fallbackModel = fallbackModel
     }
 }
 
@@ -146,6 +159,10 @@ extension Config {
                 throw ConfigError.validation("A command has an empty name")
             }
             _ = try resolveProvider(for: command)
+            if let fallback = command.fallbackProvider, providers[fallback] == nil {
+                throw ConfigError.validation(
+                    "Command \"\(command.name)\" references unknown fallback_provider \"\(fallback)\"")
+            }
             if let effort = command.reasoning, !["low", "medium", "high"].contains(effort) {
                 throw ConfigError.validation(
                     "Command \"\(command.name)\": reasoning must be low, medium or high")
@@ -174,6 +191,13 @@ extension Config {
             throw ConfigError.validation("Command \"\(command.name)\" references unknown provider \"\(name)\"")
         }
         return (name, provider)
+    }
+
+    /// Fallback endpoint for a command, or nil when none is configured.
+    /// An absent fallback_model reuses the command's primary model.
+    public func resolveFallback(for command: CommandConfig) -> (name: String, provider: ProviderConfig, model: String)? {
+        guard let name = command.fallbackProvider, let provider = providers[name] else { return nil }
+        return (name, provider, command.fallbackModel ?? command.model)
     }
 
     private static func describe(_ error: DecodingError) -> String {

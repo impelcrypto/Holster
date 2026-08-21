@@ -14,9 +14,12 @@ public final class RunViewModel: ObservableObject {
     @Published public private(set) var toast: String?
     /// Hidden thinking is arriving but no visible content yet.
     @Published public private(set) var isReasoning = false
+    /// Text the user has highlighted in the result; Speak targets this.
+    @Published public private(set) var selectedText = ""
 
     public let commandName: String
-    public let modelName: String
+    /// Switches to the fallback model name when the primary provider fails.
+    @Published public private(set) var modelName: String
 
     /// The captured selection; smart copy falls back to it and retry reuses it.
     public var selection: String?
@@ -50,6 +53,19 @@ public final class RunViewModel: ObservableObject {
 
     public func noteReasoning() {
         if !isReasoning { isReasoning = true }
+    }
+
+    public func noteFallback(providerName: String, model: String) {
+        modelName = model
+        isReasoning = false
+        flashToast("Provider failed — using \(providerName)")
+    }
+
+    /// Keeps the last non-empty selection: clicking Speak resigns the field
+    /// editor (an empty-selection event) just before the button action reads it.
+    public func setSelectedText(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty, trimmed != selectedText { selectedText = trimmed }
     }
 
     /// MarkdownUI re-parses the whole document on every update, so deltas are

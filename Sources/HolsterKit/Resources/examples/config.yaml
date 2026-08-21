@@ -18,13 +18,19 @@ providers:
 
 default_provider: cliproxy
 
-# Optional high-quality TTS via an OpenAI-compatible /audio/speech endpoint.
-# Leave base_url empty to use the built-in macOS voice instead.
+# TTS. Three modes:
+#   provider: edge         -> free Microsoft Edge voices, no API key (voice is
+#                             an Edge name like en-US-AvaMultilingualNeural)
+#   base_url set           -> OpenAI-compatible /audio/speech (voice e.g. alloy)
+#   neither                -> built-in macOS voice (voice is a macOS name like
+#                             Ava; premium voices download in System Settings >
+#                             Accessibility > Spoken Content > Manage Voices)
 tts:
-  base_url: ""
-  api_key: ""
-  model: gpt-4o-mini-tts
-  voice: alloy
+  provider: edge
+  voice: en-US-AvaMultilingualNeural
+  # base_url: ""           # for an OpenAI-compatible endpoint instead of edge
+  # api_key: ""
+  # model: gpt-4o-mini-tts
 
 commands:
   - name: Grammar Teacher
@@ -33,3 +39,5 @@ commands:
     provider: cliproxy
     model: gpt-5.6-sol
     # reasoning: medium    # low / medium / high; omit to send no reasoning field
+    # fallback_provider: ollama   # used when the provider fails before any output
+    # fallback_model: qwen3:8b    # omit to reuse the primary model

@@ -71,6 +71,17 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(try store.promptText(for: saved), "New text {selection}")
     }
 
+    func testSaveTTSRoundTrips() throws {
+        try store.saveTTS(voice: "en-US-EmmaNeural")
+        XCTAssertEqual(store.config?.tts?.provider, "edge")
+        XCTAssertEqual(store.config?.tts?.voice, "en-US-EmmaNeural")
+        // The rewritten YAML must survive a fresh parse.
+        let reparsed = try Config.parse(yaml: String(
+            contentsOf: directory.appendingPathComponent("config.yaml"), encoding: .utf8))
+        XCTAssertEqual(reparsed.tts?.voice, "en-US-EmmaNeural")
+        XCTAssertEqual(reparsed.commands.count, 1)
+    }
+
     func testDeleteRemovesCommandButKeepsPromptFile() throws {
         try store.deleteCommand(named: "Existing")
         XCTAssertNil(store.command(named: "Existing"))
@@ -129,6 +140,49 @@ final class ConfigWriterTests: XCTestCase {
         draft.name = "Router"
         draft.model = "m"
         draft.provider = ProviderPreset.custom
+        XCTAssertThrowsError(try store.saveCommand(originalName: nil, draft: draft))
+    }
+
+    func testFallbackRoundTrips() throws {
+        var draft = ConfigStore.CommandDraft()
+        draft.name = "WithFallback"
+        draft.model = "m"
+        draft.provider = "local"
+        draft.fallbackProvider = "local"
+        draft.fallbackModel = "m-backup"
+        draft.promptText = "{selection}"
+        try store.saveCommand(originalName: nil, draft: draft)
+
+        let saved = try XCTUnwrap(store.command(named: "WithFallback"))
+        XCTAssertEqual(saved.fallbackProvider, "local")
+        XCTAssertEqual(saved.fallbackModel, "m-backup")
+        XCTAssertEqual(store.draft(for: saved).fallbackProvider, "local")
+        XCTAssertEqual(store.draft(for: saved).fallbackModel, "m-backup")
+    }
+
+    func testFallbackModelIsDroppedWithoutFallbackProvider() throws {
+        var draft = ConfigStore.CommandDraft()
+        draft.name = "NoFallback"
+        draft.model = "m"
+        draft.provider = "local"
+        draft.fallbackModel = "orphan"
+        draft.promptText = "{selection}"
+        try store.saveCommand(originalName: nil, draft: draft)
+
+        let saved = try XCTUnwrap(store.command(named: "NoFallback"))
+        XCTAssertNil(saved.fallbackProvider)
+        XCTAssertNil(saved.fallbackModel)
+        let yaml = try String(
+            contentsOf: directory.appendingPathComponent("config.yaml"), encoding: .utf8)
+        XCTAssertFalse(yaml.contains("fallback_model"))
+    }
+
+    func testRejectsUnknownFallbackProvider() {
+        var draft = ConfigStore.CommandDraft()
+        draft.name = "X"
+        draft.model = "m"
+        draft.provider = "local"
+        draft.fallbackProvider = "missing"
         XCTAssertThrowsError(try store.saveCommand(originalName: nil, draft: draft))
     }
 

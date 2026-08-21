@@ -81,6 +81,12 @@ struct ResultView: View {
         }
         .animation(.easeInOut(duration: 0.15), value: model.toast)
         .tint(HolsterTheme.accentDeep)
+        // SwiftUI's .textSelection is NSTextView-backed; read its selection so
+        // Speak targets exactly what the user highlighted.
+        .onReceive(NotificationCenter.default.publisher(for: NSTextView.didChangeSelectionNotification)) { note in
+            guard let tv = note.object as? NSTextView else { return }
+            model.setSelectedText((tv.string as NSString).substring(with: tv.selectedRange()))
+        }
     }
 
     private var hairline: some View {
@@ -174,10 +180,10 @@ struct ResultView: View {
                 .keyboardShortcut("r", modifiers: .command)
             }
             Spacer()
-            Button("Speak") { model.onSpeak?(model.smartCopyText) }
+            Button("Speak") { model.onSpeak?(model.selectedText) }
                 .buttonStyle(GhostButtonStyle())
                 .keyboardShortcut("s", modifiers: .command)
-                .disabled(model.state != .done)
+                .disabled(model.selectedText.isEmpty)
             Button("Copy All") { copy(model.fullText, closing: false) }
                 .buttonStyle(GhostButtonStyle())
                 .keyboardShortcut(.return, modifiers: [.command, .shift])

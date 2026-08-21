@@ -104,17 +104,35 @@ enum CLIMode {
             let template = try store.promptText(for: command)
             let (providerName, provider) = try config.resolveProvider(for: command)
             let clipboard = NSPasteboard.general.string(forType: .string)
+            let prompt = PromptTemplate.render(template, selection: input, clipboard: clipboard)
             let request = LLMRequest(
                 baseURL: provider.baseURL,
                 apiKey: provider.apiKey,
                 model: command.model,
-                prompt: PromptTemplate.render(template, selection: input, clipboard: clipboard),
-                reasoningEffort: command.resolvedReasoning(providerName: providerName),
+                prompt: prompt,
+                reasoningEffort: command.resolvedReasoning(
+                    providerName: providerName, model: command.model),
                 stream: !noStream)
-            for try await event in LLMClient.stream(request) {
-                if case .content(let chunk) = event {
+            let fallback = config.resolveFallback(for: command)
+            let fallbackRequest = fallback.map {
+                LLMRequest(
+                    baseURL: $0.provider.baseURL,
+                    apiKey: $0.provider.apiKey,
+                    model: $0.model,
+                    prompt: prompt,
+                    reasoningEffort: command.resolvedReasoning(
+                        providerName: $0.name, model: $0.model),
+                    stream: !noStream)
+            }
+            for try await event in LLMClient.streamWithFallback(request, fallback: fallbackRequest) {
+                switch event {
+                case .content(let chunk):
                     fputs(chunk, stdout)
                     fflush(stdout)
+                case .fallback:
+                    fputs("Holster: provider failed, using fallback \"\(fallback?.name ?? "")\"\n", stderr)
+                case .reasoning:
+                    break
                 }
             }
             fputs("\n", stdout)

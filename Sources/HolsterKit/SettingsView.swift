@@ -6,52 +6,40 @@ private let recorderName = KeyboardShortcuts.Name("settings.recorder.scratch")
 
 struct SettingsView: View {
     @ObservedObject var store: ConfigStore
-    @State private var selectedCommand: String?
+    @State private var selection: SidebarItem? = .general
     @State private var showSavedToast = false
+
+    enum SidebarItem: Hashable {
+        case general
+        case speak
+        case command(String)
+        case newCommand
+    }
 
     var body: some View {
         NavigationSplitView {
-            List(store.config?.commands ?? [], id: \.name, selection: $selectedCommand) { command in
-                HStack(spacing: 9) {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(HolsterTheme.accent)
-                        .frame(width: 22, height: 22)
-                        .background(
-                            HolsterTheme.accent.opacity(0.16),
-                            in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(command.name)
-                            .lineLimit(1)
-                        if let hotkey = command.hotkey, !hotkey.isEmpty {
-                            Text(hotkeyDisplay(hotkey))
-                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.tertiary)
-                        }
+            List(selection: $selection) {
+                Label("General", systemImage: "gearshape")
+                    .tag(SidebarItem.general)
+                Label("Speak", systemImage: "speaker.wave.2.fill")
+                    .tag(SidebarItem.speak)
+                Section("Prompts") {
+                    ForEach(store.config?.commands ?? [], id: \.name) { command in
+                        commandRow(command).tag(SidebarItem.command(command.name))
                     }
                 }
-                .padding(.vertical, 3)
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 220, ideal: 250)
             .toolbar {
                 Button {
-                    selectedCommand = nil
+                    selection = .newCommand
                 } label: {
                     Label("New Command", systemImage: "plus")
                 }
             }
         } detail: {
-            CommandEditor(
-                store: store,
-                originalName: selectedCommand,
-                onSaved: { name in
-                    // Empty name means a delete, not a save.
-                    selectedCommand = name.isEmpty ? nil : name
-                    if !name.isEmpty { flashSavedToast() }
-                })
-            // Rebuild the editor whenever another command is picked.
-            .id(selectedCommand ?? "\u{2205}new")
+            detail
         }
         .frame(minWidth: 760, minHeight: 520)
         // Overlay must come before the safeAreaInset so the toast sits above
@@ -70,11 +58,6 @@ struct SettingsView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { statusBar }
-        .onAppear {
-            if selectedCommand == nil {
-                selectedCommand = store.config?.commands.first?.name
-            }
-        }
         // The scratch recorder shortcut must not stay registered globally once
         // the settings window closes. KeyboardShortcuts unregisters by VALUE,
         // not by name, so this also kills any command sharing the same combo;
@@ -84,6 +67,53 @@ struct SettingsView: View {
             store.load()
         }
         .tint(HolsterTheme.accentDeep)
+    }
+
+    @ViewBuilder private var detail: some View {
+        switch selection {
+        case .command(let name):
+            CommandEditor(store: store, originalName: name, onSaved: handleSaved)
+                .id(name)   // rebuild the editor when another command is picked
+        case .newCommand:
+            CommandEditor(store: store, originalName: nil, onSaved: handleSaved)
+                .id("\u{2205}new")
+        case .speak:
+            SpeakSettingsView(store: store)
+        case .general, .none:
+            GeneralSettingsView()
+        }
+    }
+
+    private func handleSaved(_ name: String) {
+        // Empty name means a delete, not a save.
+        if name.isEmpty {
+            selection = .general
+        } else {
+            selection = .command(name)
+            flashSavedToast()
+        }
+    }
+
+    @ViewBuilder private func commandRow(_ command: CommandConfig) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: "bolt.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(HolsterTheme.accent)
+                .frame(width: 22, height: 22)
+                .background(
+                    HolsterTheme.accent.opacity(0.16),
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(command.name)
+                    .lineLimit(1)
+                if let hotkey = command.hotkey, !hotkey.isEmpty {
+                    Text(hotkeyDisplay(hotkey))
+                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(.vertical, 3)
     }
 
     private func flashSavedToast() {
@@ -126,7 +156,7 @@ private func hotkeyDisplay(_ hotkey: String) -> String {
     (try? HotkeyParser.parse(hotkey)).map { "\($0)" } ?? hotkey
 }
 
-private struct SettingsCard<Content: View>: View {
+struct SettingsCard<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -140,7 +170,7 @@ private struct SettingsCard<Content: View>: View {
     }
 }
 
-private struct SettingRow<Content: View>: View {
+struct SettingRow<Content: View>: View {
     let label: String
     @ViewBuilder var content: Content
 
@@ -157,12 +187,37 @@ private struct SettingRow<Content: View>: View {
     }
 }
 
-private struct RowDivider: View {
+struct RowDivider: View {
     var body: some View {
         Rectangle()
             .fill(HolsterTheme.hairline)
             .frame(height: 1)
             .padding(.leading, 14)
+    }
+}
+
+/// Uppercase section header with an optional inline note, matching the editor.
+struct SettingsSection<Content: View>: View {
+    let title: String
+    var note: String? = nil
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
+                if let note {
+                    Text(note)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.leading, 2)
+            content
+        }
     }
 }
 
@@ -243,6 +298,8 @@ private struct CommandEditor: View {
     @State private var modelsError: String?
     @State private var errorMessage: String?
     @State private var confirmDelete = false
+    @State private var advancedExpanded = false
+    @State private var fallbackModels: [String] = []
 
     private enum Field { case name, baseURL, apiKey, prompt }
     @FocusState private var focus: Field?
@@ -361,6 +418,7 @@ private struct CommandEditor: View {
                         }
                     }
                 }
+                advancedSection
                 section("Prompt", note: "{selection} is replaced with the selected text") {
                     TextEditor(text: $draft.promptText)
                         .font(.system(size: 12.5, design: .monospaced))
@@ -451,6 +509,93 @@ private struct CommandEditor: View {
         .onAppear(perform: loadDraft)
     }
 
+    /// Accordion: header toggles the fallback card, collapsed by default
+    /// unless the command already has a fallback configured.
+    private var advancedSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) { advancedExpanded.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .rotationEffect(.degrees(advancedExpanded ? 90 : 0))
+                        Text("ADVANCED")
+                            .font(.system(size: 11, weight: .semibold))
+                            .tracking(0.8)
+                    }
+                    .foregroundStyle(.secondary)
+                    Text("Fallback is used when the provider is down")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 2)
+            if advancedExpanded {
+                SettingsCard {
+                    SettingRow(label: "Fallback Provider") {
+                        Picker("", selection: fallbackProviderBinding) {
+                            Text("None").tag("")
+                            ForEach(configuredProviderNames, id: \.self) {
+                                Text(providerLabel($0)).tag($0)
+                            }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                    if !draft.fallbackProvider.isEmpty {
+                        RowDivider()
+                        SettingRow(label: "Fallback Model") {
+                            Picker("", selection: $draft.fallbackModel) {
+                                Text("Same as primary").tag("")
+                                if !fallbackModels.contains(draft.fallbackModel),
+                                   !draft.fallbackModel.isEmpty {
+                                    Text(draft.fallbackModel).tag(draft.fallbackModel)
+                                }
+                                ForEach(fallbackModels, id: \.self) { Text($0).tag($0) }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Only providers already saved in config.yaml qualify as fallbacks; the
+    /// unsaved presets have no endpoint to fall back to yet.
+    private var configuredProviderNames: [String] {
+        ((store.config?.providers.keys).map(Array.init) ?? []).sorted()
+    }
+
+    private var fallbackProviderBinding: Binding<String> {
+        Binding(
+            get: { draft.fallbackProvider },
+            set: { name in
+                guard name != draft.fallbackProvider else { return }
+                draft.fallbackProvider = name
+                draft.fallbackModel = ""
+                fetchFallbackModels()
+            })
+    }
+
+    // ponytail: fetch failures stay silent — "Same as primary" keeps the
+    // picker usable; add an error row like the primary's if users get stuck.
+    private func fetchFallbackModels() {
+        fallbackModels = []
+        guard let provider = store.config?.providers[draft.fallbackProvider] else { return }
+        let requested = draft.fallbackProvider
+        Task { @MainActor in
+            guard let fetched = try? await LLMClient.listModels(
+                baseURL: provider.baseURL, apiKey: provider.apiKey),
+                draft.fallbackProvider == requested else { return }
+            fallbackModels = fetched
+        }
+    }
+
     private func section(
         _ title: String, note: String? = nil, @ViewBuilder content: () -> some View
     ) -> some View {
@@ -487,7 +632,9 @@ private struct CommandEditor: View {
         store.load()
         syncProviderFields()
         savedDraft = draft
+        advancedExpanded = !draft.fallbackProvider.isEmpty
         fetchModels()
+        fetchFallbackModels()
     }
 
     /// Picker writes go through here so only USER changes reset the model;

@@ -66,11 +66,9 @@ providers:                 # any OpenAI-compatible endpoints
 
 default_provider: cliproxy
 
-tts:                       # optional; empty base_url = built-in macOS voice
-  base_url: ""             # e.g. https://api.openai.com/v1
-  api_key: ""
-  model: gpt-4o-mini-tts
-  voice: alloy
+tts:                       # provider: edge = free Edge voices, no API key;
+  provider: edge           #   base_url = OpenAI-compatible; neither = macOS voice
+  voice: en-US-AvaMultilingualNeural
 
 commands:
   - name: Grammar Teacher
@@ -81,6 +79,8 @@ commands:
     reasoning: medium      # low / medium / high; omit to send no reasoning field
                            # (on opencode-go an omitted value falls back to low:
                            #  its models think by default, so "none" never helps)
+    fallback_provider: ollama   # used when the provider fails before any output
+    fallback_model: qwen3:8b    # omit to reuse the primary model
 ```
 
 The Settings window always offers `opencode-go` (OpenCode Go, fixed base URL)
@@ -116,9 +116,17 @@ disables SSE.
 
 ## Notes
 
+- `provider: edge` uses Microsoft Edge's free read-aloud voices over a
+  WebSocket — no API key, but it's an unofficial endpoint that may change; on
+  any failure Holster falls back to the built-in macOS voice.
 - TTS through CLIProxyAPI does not work (`/v1/audio/speech` is not proxied
   for subscription auth); point `tts.base_url` directly at a provider with a
-  real API key, or leave it empty for the macOS voice.
+  real API key, or use `provider: edge` / the macOS voice instead.
+- The built-in macOS voice (no provider, no base_url) honors `tts.voice` (a
+  name like `Ava` or a full identifier). Premium voices are a manual download:
+  System Settings → Accessibility → Spoken Content → System voice → Manage
+  Voices… → English (US). If the voice isn't installed, it falls back to the
+  default en-US voice.
 - The app restores your clipboard after capturing the selection and marks the
   restore transient so clipboard managers don't record a duplicate.
 

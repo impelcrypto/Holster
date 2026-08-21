@@ -50,6 +50,8 @@ public enum LLMEvent: Equatable {
     /// is alive (reasoning models emit this before any content).
     case reasoning
     case content(String)
+    /// The primary provider failed; subsequent events come from the fallback.
+    case fallback
 }
 
 public enum LLMClient {
@@ -63,6 +65,37 @@ public enum LLMClient {
                         try await streamSSE(request, into: continuation)
                     } else {
                         continuation.yield(.content(try await completeOnce(request)))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// ANY pre-content failure (401, bad URL, empty response, ...) yields .fallback
+    /// and retries once; after content, errors propagate — no duplicated output.
+    public static func streamWithFallback(
+        _ request: LLMRequest,
+        fallback: LLMRequest?
+    ) -> AsyncThrowingStream<LLMEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                var sawContent = false
+                do {
+                    do {
+                        for try await event in stream(request) {
+                            if case .content = event { sawContent = true }
+                            continuation.yield(event)
+                        }
+                    } catch let error {
+                        guard let fallback, !sawContent, !Task.isCancelled else { throw error }
+                        continuation.yield(.fallback)
+                        for try await event in stream(fallback) {
+                            continuation.yield(event)
+                        }
                     }
                     continuation.finish()
                 } catch {
