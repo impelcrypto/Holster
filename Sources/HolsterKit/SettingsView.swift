@@ -151,6 +151,10 @@ struct SettingsView: View {
     }
 }
 
+private func reasoningOptions(showNone: Bool) -> [(label: String, value: String)] {
+    (showNone ? [("None", "")] : []) + [("Low", "low"), ("Medium", "medium"), ("High", "high")]
+}
+
 /// "cmd+e" from the YAML rendered as the native "⌘E".
 private func hotkeyDisplay(_ hotkey: String) -> String {
     (try? HotkeyParser.parse(hotkey)).map { "\($0)" } ?? hotkey
@@ -249,13 +253,9 @@ extension View {
 }
 
 /// Custom segmented control: amber pill on the selected chip.
-private struct ReasoningPicker: View {
-    let showNone: Bool
+struct SegmentedPicker: View {
+    let options: [(label: String, value: String)]
     @Binding var selection: String
-
-    private var options: [(label: String, value: String)] {
-        (showNone ? [("None", "")] : []) + [("Low", "low"), ("Medium", "medium"), ("High", "high")]
-    }
 
     var body: some View {
         HStack(spacing: 2) {
@@ -405,8 +405,9 @@ private struct CommandEditor: View {
                         }
                         RowDivider()
                         SettingRow(label: "Reasoning") {
-                            ReasoningPicker(
-                                showNone: draft.provider != ProviderPreset.openCodeGo,
+                            SegmentedPicker(
+                                options: reasoningOptions(
+                                    showNone: draft.provider != ProviderPreset.openCodeGo),
                                 selection: $draft.reasoning)
                         }
                         RowDivider()

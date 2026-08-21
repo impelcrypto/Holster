@@ -26,19 +26,6 @@ private struct ContentHeightKey: PreferenceKey {
     }
 }
 
-/// Blurred backdrop for the floating panel. The panel never activates the
-/// app, so without an explicit .active state the blur renders flat.
-private struct PanelBackdrop: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .hudWindow
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
-}
-
 private struct PulsingDot: View {
     @State private var dimmed = false
 
@@ -65,7 +52,9 @@ struct ResultView: View {
             footer
         }
         .frame(minWidth: 520, minHeight: 160)
-        .background(PanelBackdrop().ignoresSafeArea())
+        // Opaque, not a blurred material: over a light window the translucent
+        // backdrop washed the text out.
+        .background(HolsterTheme.windowBackground.ignoresSafeArea())
         .overlay(alignment: .bottom) {
             if let toast = model.toast {
                 Label(toast, systemImage: "checkmark.circle.fill")
@@ -102,7 +91,7 @@ struct ResultView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 2)
-                .background(Color.white.opacity(0.07), in: Capsule())
+                .background(Color.primary.opacity(0.07), in: Capsule())
                 .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
             Spacer()
             if model.state == .capturing || model.state == .streaming {

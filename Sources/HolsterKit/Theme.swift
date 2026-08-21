@@ -1,7 +1,8 @@
+import AppKit
 import SwiftUI
 
-/// Dark-theme design tokens. The amber/copper accent is sampled from the app
-/// icon's brass and leather.
+/// Design tokens for both themes. The amber/copper accent is sampled from the
+/// app icon's brass and leather and stays the same in either appearance.
 enum HolsterTheme {
     static let accent = Color(hex: 0xFFB354)
     static let accentDeep = Color(hex: 0xC66E3D)
@@ -9,10 +10,42 @@ enum HolsterTheme {
         colors: [accent, accentDeep], startPoint: .top, endPoint: .bottom)
 
     /// Surface layering: window < card < inset (fields, editors).
-    static let windowBackground = Color(hex: 0x19181B)
-    static let card = Color.white.opacity(0.05)
-    static let inset = Color.black.opacity(0.25)
-    static let hairline = Color.white.opacity(0.08)
+    static let windowBackground = adaptive(dark: Color(hex: 0x19181B), light: Color(hex: 0xEEEDF0))
+    static let card = adaptive(dark: .white.opacity(0.05), light: .white.opacity(0.7))
+    static let inset = adaptive(dark: .black.opacity(0.25), light: .black.opacity(0.05))
+    static let hairline = adaptive(dark: .white.opacity(0.08), light: .black.opacity(0.1))
+}
+
+/// These tokens are `static let`, so a plain `isDark ? a : b` would freeze at
+/// first use. An NSColor dynamic provider re-resolves on every draw instead.
+private func adaptive(dark: Color, light: Color) -> Color {
+    Color(nsColor: NSColor(name: nil) { appearance in
+        NSColor(appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light)
+    })
+}
+
+/// App appearance, persisted in UserDefaults. `system` leaves NSApp.appearance
+/// nil so macOS drives it live.
+enum AppearancePreference: String, CaseIterable {
+    case system, light, dark
+
+    static let storageKey = "appearance"
+
+    static var stored: AppearancePreference {
+        UserDefaults.standard.string(forKey: storageKey).flatMap(Self.init) ?? .system
+    }
+
+    var label: String { rawValue.capitalized }
+
+    // ponytail: an already-open result panel keeps the old theme until the next
+    // run; force a redraw of NSApp.windows if that ever matters.
+    func apply() {
+        switch self {
+        case .system: NSApp.appearance = nil
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
 }
 
 extension Color {
@@ -72,7 +105,7 @@ struct GhostButtonStyle: ButtonStyle {
                 .padding(.horizontal, 13)
                 .padding(.vertical, 5)
                 .background(
-                    Color.white.opacity(configuration.isPressed ? 0.14 : hovering ? 0.1 : 0.06),
+                    Color.primary.opacity(configuration.isPressed ? 0.14 : hovering ? 0.1 : 0.06),
                     in: Capsule())
                 .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
                 .opacity(isEnabled ? 1 : 0.4)

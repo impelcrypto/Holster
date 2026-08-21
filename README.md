@@ -129,6 +129,9 @@ disables SSE.
   default en-US voice.
 - The app restores your clipboard after capturing the selection and marks the
   restore transient so clipboard managers don't record a duplicate.
+- Settings → General → Theme picks System (default), Light or Dark. It is stored
+  in UserDefaults, not `config.yaml`. A result window that is already open keeps
+  the old theme until the next run.
 
 ## License
 

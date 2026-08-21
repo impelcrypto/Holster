@@ -59,9 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Accessory policy also when launched via `swift run` (no Info.plist).
         NSApp.setActivationPolicy(.accessory)
-        // App-wide dark theme: also reaches AppKit-backed controls (recorder,
-        // alerts) that per-view SwiftUI colorScheme forcing would miss.
-        NSApp.appearance = NSAppearance(named: .darkAqua)
+        // App-wide: also reaches AppKit-backed controls (recorder, alerts) that
+        // per-view SwiftUI colorScheme forcing would miss.
+        AppearancePreference.stored.apply()
         AppState.shared.start()
     }
 }
