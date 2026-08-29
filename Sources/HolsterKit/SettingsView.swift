@@ -307,17 +307,21 @@ private struct CommandEditor: View {
     private var providerNames: [String] {
         var names = Set((store.config?.providers.keys).map(Array.init) ?? [])
         names.insert(ProviderPreset.openCodeGo)
+        names.insert(ProviderPreset.gemini)
         names.insert(ProviderPreset.custom)
         return names.sorted()
     }
 
     private var isPresetProvider: Bool {
-        draft.provider == ProviderPreset.openCodeGo || draft.provider == ProviderPreset.custom
+        draft.provider == ProviderPreset.openCodeGo
+            || draft.provider == ProviderPreset.gemini
+            || draft.provider == ProviderPreset.custom
     }
 
     private func providerLabel(_ name: String) -> String {
         switch name {
         case ProviderPreset.openCodeGo: return "OpenCode Go"
+        case ProviderPreset.gemini: return "Google Gemini"
         case ProviderPreset.custom: return "Custom Endpoint"
         default: return name
         }
@@ -369,7 +373,9 @@ private struct CommandEditor: View {
                         if isPresetProvider {
                             RowDivider()
                             SettingRow(label: "API Key") {
-                                TextField("", text: $draft.apiKey, prompt: Text("sk-…"))
+                                TextField(
+                                    "", text: $draft.apiKey,
+                                    prompt: Text(draft.provider == ProviderPreset.gemini ? "AIza…" : "sk-…"))
                                     .font(.system(size: 12, design: .monospaced))
                                     .focused($focus, equals: .apiKey)
                                     .onSubmit { fetchModels() }
@@ -662,8 +668,14 @@ private struct CommandEditor: View {
             draft.baseURL = saved.baseURL
             draft.apiKey = saved.apiKey ?? ""
         } else {
-            draft.baseURL = draft.provider == ProviderPreset.openCodeGo
-                ? ProviderPreset.openCodeGoBaseURL : ""
+            switch draft.provider {
+            case ProviderPreset.openCodeGo:
+                draft.baseURL = ProviderPreset.openCodeGoBaseURL
+            case ProviderPreset.gemini:
+                draft.baseURL = ProviderPreset.geminiBaseURL
+            default:
+                draft.baseURL = ""
+            }
             draft.apiKey = ""
         }
         // No "None" on OpenCode Go (its models all think by default).
@@ -678,8 +690,14 @@ private struct CommandEditor: View {
         let baseURL: String
         let apiKey: String?
         if isPresetProvider {
-            baseURL = draft.provider == ProviderPreset.openCodeGo
-                ? ProviderPreset.openCodeGoBaseURL : draft.baseURL
+            switch draft.provider {
+            case ProviderPreset.openCodeGo:
+                baseURL = ProviderPreset.openCodeGoBaseURL
+            case ProviderPreset.gemini:
+                baseURL = ProviderPreset.geminiBaseURL
+            default:
+                baseURL = draft.baseURL
+            }
             apiKey = draft.apiKey
         } else if let provider = store.config?.providers[draft.provider] {
             baseURL = provider.baseURL
@@ -688,8 +706,8 @@ private struct CommandEditor: View {
             return
         }
         guard !baseURL.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        // Go always rejects keyless requests; don't flash a 401 before a key is typed.
-        if draft.provider == ProviderPreset.openCodeGo, draft.apiKey.isEmpty { return }
+        if [ProviderPreset.openCodeGo, ProviderPreset.gemini].contains(draft.provider),
+           draft.apiKey.isEmpty { return }
         let requestedProvider = draft.provider
         Task { @MainActor in
             do {

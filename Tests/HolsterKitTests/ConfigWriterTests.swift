@@ -199,4 +199,19 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(provider.baseURL, ProviderPreset.openCodeGoBaseURL)
         XCTAssertEqual(provider.apiKey, "sk-go")
     }
+
+    func testGeminiPresetGetsCanonicalBaseURL() throws {
+        var draft = ConfigStore.CommandDraft()
+        draft.name = "Gemini"
+        draft.model = "gemini-3.7-flash"
+        draft.provider = ProviderPreset.gemini
+        draft.apiKey = "gemini-key"
+        draft.promptText = "{selection}"
+        try store.saveCommand(originalName: nil, draft: draft)
+
+        let provider = try XCTUnwrap(store.config?.providers[ProviderPreset.gemini])
+        XCTAssertEqual(provider.baseURL, ProviderPreset.geminiBaseURL)
+        XCTAssertEqual(provider.apiKey, "gemini-key")
+        XCTAssertEqual(store.command(named: "Gemini")?.provider, ProviderPreset.gemini)
+    }
 }

@@ -12,6 +12,9 @@ providers:
   # opencode-go:           # https://opencode.ai/docs/go/
   #   base_url: https://opencode.ai/zen/go/v1
   #   api_key: ""
+  # gemini:                # Google Gemini API via its OpenAI-compatible endpoint
+  #   base_url: https://generativelanguage.googleapis.com/v1beta/openai
+  #   api_key: ""
   # custom:                # any OpenAI-compatible endpoint, e.g. OpenRouter
   #   base_url: https://openrouter.ai/api/v1
   #   api_key: ""

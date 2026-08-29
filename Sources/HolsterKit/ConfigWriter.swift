@@ -4,6 +4,8 @@ import Foundation
 public enum ProviderPreset {
     public static let openCodeGo = "opencode-go"
     public static let openCodeGoBaseURL = "https://opencode.ai/zen/go/v1"
+    public static let gemini = "gemini"
+    public static let geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
     public static let custom = "custom"
 }
 
@@ -104,6 +106,10 @@ extension ConfigStore {
             // ponytail: preset always re-asserts the canonical URL; hand-edits lose.
             config.providers[ProviderPreset.openCodeGo] = ProviderConfig(
                 baseURL: ProviderPreset.openCodeGoBaseURL,
+                apiKey: draft.apiKey)
+        case ProviderPreset.gemini:
+            config.providers[ProviderPreset.gemini] = ProviderConfig(
+                baseURL: ProviderPreset.geminiBaseURL,
                 apiKey: draft.apiKey)
         case ProviderPreset.custom:
             let baseURL = draft.baseURL.trimmingCharacters(in: .whitespaces)

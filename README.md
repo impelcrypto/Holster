@@ -60,6 +60,9 @@ providers:                 # any OpenAI-compatible endpoints
   opencode-go:             # https://opencode.ai/docs/go/
     base_url: https://opencode.ai/zen/go/v1
     api_key: ""
+  gemini:                  # Google Gemini API
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    api_key: ""
   custom:                  # e.g. OpenRouter; editable from Settings
     base_url: https://openrouter.ai/api/v1
     api_key: ""
@@ -89,9 +92,9 @@ plaintext provider or TTS API keys to Keychain and removes them from the file.
 Development executables launched with `swift run` keep using `api_key` from
 YAML; the packaged app uses Keychain in both menu-bar and headless CLI modes.
 
-The Settings window always offers `opencode-go` (OpenCode Go, fixed base URL)
-and `custom` (free-form base URL) as providers and writes them to `providers:`
-on save.
+The Settings window always offers `opencode-go` (OpenCode Go, fixed base URL),
+`gemini` (Google Gemini, fixed OpenAI-compatible base URL), and `custom`
+(free-form base URL) as providers and writes them to `providers:` on save.
 
 Prompt files support two placeholders: `{selection}` (the captured selection)
 and `{clipboard}` (current clipboard contents).
