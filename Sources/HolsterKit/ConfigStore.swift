@@ -1,5 +1,90 @@
 import Combine
 import Foundation
+import Security
+import Yams
+
+public protocol APIKeyStoring {
+    func apiKey(for account: String) throws -> String?
+    func setAPIKey(_ apiKey: String?, for account: String) throws
+}
+
+public enum APIKeyPersistence: Equatable {
+    case configFile
+    case keychain
+
+    public static var applicationDefault: APIKeyPersistence {
+        defaultForApplication(at: Bundle.main.bundlePath)
+    }
+
+    public static func defaultForApplication(at bundlePath: String) -> APIKeyPersistence {
+        bundlePath.hasSuffix(".app") ? .keychain : .configFile
+    }
+}
+
+public struct KeychainAPIKeyStore: APIKeyStoring {
+    private let service: String
+
+    public init(service: String = "app.holster.api-keys") {
+        self.service = service
+    }
+
+    public func apiKey(for account: String) throws -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = result as? Data,
+              let apiKey = String(data: data, encoding: .utf8) else {
+            throw APIKeyStoreError(status: status)
+        }
+        return apiKey
+    }
+
+    public func setAPIKey(_ apiKey: String?, for account: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        guard let apiKey, !apiKey.isEmpty else {
+            let status = SecItemDelete(query as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw APIKeyStoreError(status: status)
+            }
+            return
+        }
+
+        let data = Data(apiKey.utf8)
+        let updateStatus = SecItemUpdate(
+            query as CFDictionary,
+            [kSecValueData as String: data] as CFDictionary)
+        if updateStatus == errSecSuccess { return }
+        guard updateStatus == errSecItemNotFound else {
+            throw APIKeyStoreError(status: updateStatus)
+        }
+        var attributes = query
+        attributes[kSecValueData as String] = data
+        let addStatus = SecItemAdd(attributes as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw APIKeyStoreError(status: addStatus)
+        }
+    }
+}
+
+private struct APIKeyStoreError: LocalizedError {
+    let status: OSStatus
+
+    var errorDescription: String? {
+        let detail = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
+        return "Cannot access API key in Keychain: \(detail)"
+    }
+}
 
 @MainActor
 public final class ConfigStore: ObservableObject {
@@ -10,16 +95,25 @@ public final class ConfigStore: ObservableObject {
     public var configFile: URL { directory.appendingPathComponent("config.yaml") }
     public var promptsDirectory: URL { directory.appendingPathComponent("prompts") }
 
+    public let apiKeyPersistence: APIKeyPersistence
+
     /// Called after every successful (re)load, e.g. to re-register hotkeys.
     public var onReload: ((Config) -> Void)?
 
     private var watchers: [DirectoryWatcher] = []
     private var reloadWorkItem: DispatchWorkItem?
+    private let apiKeyStore: APIKeyStoring
 
-    public init(directory: URL? = nil) {
+    public init(
+        directory: URL? = nil,
+        apiKeyPersistence: APIKeyPersistence = .applicationDefault,
+        apiKeyStore: APIKeyStoring = KeychainAPIKeyStore()
+    ) {
         self.directory = directory
             ?? FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".config/holster", isDirectory: true)
+        self.apiKeyPersistence = apiKeyPersistence
+        self.apiKeyStore = apiKeyStore
     }
 
     /// Full app startup: seed examples on first run, load, then watch files.
@@ -39,9 +133,10 @@ public final class ConfigStore: ObservableObject {
         do {
             let yaml = try String(contentsOf: configFile, encoding: .utf8)
             let parsed = try Config.parse(yaml: yaml)
-            config = parsed
+            let loaded = try loadAPIKeys(into: parsed)
+            config = loaded
             lastError = nil
-            onReload?(parsed)
+            onReload?(loaded)
         } catch let error as ConfigError {
             lastError = error.localizedDescription
         } catch {
@@ -60,6 +155,70 @@ public final class ConfigStore: ObservableObject {
         } catch {
             throw ConfigError.unreadable("prompt file \(url.path)")
         }
+    }
+
+    func write(_ config: Config) throws {
+        let persisted = try persistAPIKeys(from: config)
+        try writeConfigFile(persisted)
+        load()
+    }
+
+    private func loadAPIKeys(into config: Config) throws -> Config {
+        guard apiKeyPersistence == .keychain else { return config }
+        var hydrated = config
+        var persisted = config
+        var needsMigration = false
+
+        for (name, provider) in config.providers {
+            let account = "provider:\(name)"
+            if let apiKey = provider.apiKey {
+                if apiKey.isEmpty {
+                    hydrated.providers[name]?.apiKey = try apiKeyStore.apiKey(for: account)
+                } else {
+                    try apiKeyStore.setAPIKey(apiKey, for: account)
+                }
+                persisted.providers[name]?.apiKey = nil
+                needsMigration = true
+            } else {
+                hydrated.providers[name]?.apiKey = try apiKeyStore.apiKey(for: account)
+            }
+        }
+        if let apiKey = config.tts?.apiKey {
+            if apiKey.isEmpty {
+                hydrated.tts?.apiKey = try apiKeyStore.apiKey(for: "tts")
+            } else {
+                try apiKeyStore.setAPIKey(apiKey, for: "tts")
+            }
+            persisted.tts?.apiKey = nil
+            needsMigration = true
+        } else {
+            hydrated.tts?.apiKey = try apiKeyStore.apiKey(for: "tts")
+        }
+        if needsMigration {
+            try writeConfigFile(persisted)
+        }
+        return hydrated
+    }
+
+    private func persistAPIKeys(from config: Config) throws -> Config {
+        guard apiKeyPersistence == .keychain else { return config }
+        var persisted = config
+        for (name, provider) in config.providers {
+            if let apiKey = provider.apiKey {
+                try apiKeyStore.setAPIKey(apiKey.isEmpty ? nil : apiKey, for: "provider:\(name)")
+            }
+            persisted.providers[name]?.apiKey = nil
+        }
+        if let apiKey = config.tts?.apiKey {
+            try apiKeyStore.setAPIKey(apiKey.isEmpty ? nil : apiKey, for: "tts")
+        }
+        persisted.tts?.apiKey = nil
+        return persisted
+    }
+
+    private func writeConfigFile(_ config: Config) throws {
+        let yaml = try YAMLEncoder().encode(config)
+        try yaml.write(to: configFile, atomically: true, encoding: .utf8)
     }
 
     // MARK: - First run

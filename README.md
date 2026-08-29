@@ -54,7 +54,7 @@ Note: a GUI save re-serializes `config.yaml`, so YAML comments are lost.
 providers:                 # any OpenAI-compatible endpoints
   cliproxy:
     base_url: http://127.0.0.1:8317/v1
-    api_key: ""            # only if your proxy requires one
+    api_key: ""            # only for CLI/dev; the app uses macOS Keychain
   ollama:
     base_url: http://127.0.0.1:11434/v1
   opencode-go:             # https://opencode.ai/docs/go/
@@ -82,6 +82,12 @@ commands:
     fallback_provider: ollama   # used when the provider fails before any output
     fallback_model: qwen3:8b    # omit to reuse the primary model
 ```
+
+The packaged app stores API keys entered in Settings in macOS Keychain, not in
+`config.yaml`. When it first opens an existing config, it also migrates any
+plaintext provider or TTS API keys to Keychain and removes them from the file.
+Development executables launched with `swift run` keep using `api_key` from
+YAML; the packaged app uses Keychain in both menu-bar and headless CLI modes.
 
 The Settings window always offers `opencode-go` (OpenCode Go, fixed base URL)
 and `custom` (free-form base URL) as providers and writes them to `providers:`

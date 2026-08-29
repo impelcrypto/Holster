@@ -1,5 +1,4 @@
 import Foundation
-import Yams
 
 /// Providers the GUI can create on demand, without hand-editing config.yaml.
 public enum ProviderPreset {
@@ -164,12 +163,6 @@ extension ConfigStore {
         try write(config)
         // The prompt file stays on disk on purpose; deleting text a user may
         // want back is worse than leaving a stray file.
-    }
-
-    private func write(_ config: Config) throws {
-        let yaml = try YAMLEncoder().encode(config)
-        try yaml.write(to: configFile, atomically: true, encoding: .utf8)
-        load()
     }
 
     private func slugify(_ name: String) -> String {
