@@ -17,9 +17,9 @@ floating markdown window. Press ⌘↩ to copy it and close.
 
 Holster talks to any OpenAI-compatible endpoint, so the model behind a command
 can be a local Ollama, OpenAI, Google Gemini, OpenRouter, or a CLIProxyAPI
-sitting in front of a ChatGPT or Claude subscription you already pay for. Prompts and commands are
-plain files under `~/.config/holster/`, so you can keep them in git. Built as a
-stable replacement for Raycast AI custom commands.
+sitting in front of a ChatGPT or Claude subscription you already pay for.
+Prompts and commands are plain files under `~/.config/holster/`, so you can keep
+them in git. Built as a stable replacement for Raycast AI custom commands.
 
 <div align="center">
 
@@ -30,16 +30,16 @@ stable replacement for Raycast AI custom commands.
 ## Features
 
 - One global hotkey per command, recorded in Settings with a duplicate check
-- Prompts and commands are plain files: git-friendly, hot-reloaded, and also
-  editable from the built-in Settings UI
+- Prompts and commands are plain files: git-friendly, hot-reloaded, and editable
+  from the built-in Settings UI
 - Streaming markdown rendering, GFM tables included
 - Smart copy pulls out the corrected sentence instead of the whole response
 - API keys go to the macOS Keychain, never to `config.yaml`
 - A fallback provider takes over when the primary one dies before any output
 - Optional text-to-speech: free Edge voices, an OpenAI-compatible
   `/audio/speech`, or the built-in macOS voice
-- Your clipboard survives the capture, and the restore is marked transient so
-  clipboard managers don't log a duplicate
+- Holster restores your clipboard after the capture and marks the restore
+  transient, so clipboard managers don't log a duplicate
 - Headless CLI mode for scripting and for testing prompts
 - Native Swift and SwiftUI. No Electron, one small binary
 
@@ -75,8 +75,8 @@ with every install route, Homebrew included.
 
 ### Build from source
 
-Everything goes through SPM and there is no Xcode project to open, but you do
-need Xcode installed for Swift 6.
+Everything goes through SPM. There is no Xcode project to open, but you do need
+Xcode installed for Swift 6.
 
 ```sh
 git clone https://github.com/impelcrypto/Holster.git
@@ -107,8 +107,8 @@ that matches what you already have.
 
 ### Ollama: free, and the quickest to get running
 
-Cloud models run on Ollama's machines, so a 31B model answers at full speed on a
-Mac that could never hold it in memory.
+Cloud models run on Ollama's machines, so a 31B model works on a Mac that could
+never hold it in memory.
 
 ```sh
 brew install ollama          # or grab the app from https://ollama.com/download
@@ -124,14 +124,14 @@ command ships on `cliproxy`, so it keeps failing until you switch it.
 
 The free tier covers light use, with limits that reset per session and per week
 ([pricing](https://ollama.com/pricing)). To skip the account and the limits, pull
-a local model instead: `ollama pull gemma4:12b` weighs about 7 GB and runs
-entirely on your Mac.
+a local model instead: `ollama pull gemma4:12b` weighs about 7 GB and never
+leaves your Mac.
 
 ### CLIProxyAPI: your ChatGPT or Claude subscription, no API key
 
 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) signs in to a
-subscription you already pay for and serves it on an OpenAI-compatible port.
-Nothing is billed per token.
+subscription you already pay for and serves it on an OpenAI-compatible port. You
+pay nothing per token.
 
 ```sh
 brew install cliproxyapi
@@ -140,13 +140,13 @@ cliproxyapi --claude-login   # Claude Pro/Max
 brew services start cliproxyapi
 ```
 
-The proxy listens on 8317, which is where the example config's `cliproxy`
-provider already points, and it takes an empty API key.
+The proxy listens on 8317, where the example config's `cliproxy` provider already
+points, and it takes an empty API key.
 
-This setup has more moving parts than the other two, so the easiest route is to
-delegate it: hand this README and <https://help.router-for.me/> to Claude Code or
-another coding agent and ask it to finish the setup. It can install the binary,
-walk you through the OAuth login, and write the provider into `config.yaml`.
+This setup has more moving parts than the other two, so hand this README and
+<https://help.router-for.me/> to Claude Code or another coding agent and let it
+finish the job. It can install the binary, walk you through the OAuth login, and
+write the provider into `config.yaml`.
 
 ### OpenCode Go and Gemini API keys
 
@@ -160,8 +160,8 @@ under the `custom` preset with its own base URL. Saving writes the provider into
 
 Everything lives in `~/.config/holster/`. Edit the files directly or use the
 Settings window (menu bar icon → Settings…). Both stay in sync because the files
-are the single source of truth and the app watches them. One caveat: saving from
-the GUI re-serializes `config.yaml`, which drops your YAML comments.
+are the single source of truth and the app watches them. Saving from the GUI
+re-serializes `config.yaml`, which drops your YAML comments.
 
 ```yaml
 # config.yaml
@@ -206,19 +206,18 @@ Prompt files take two placeholders: `{selection}` for the captured selection and
 
 ### API keys
 
-The packaged app stores keys you enter in Settings in the macOS Keychain rather
-than in `config.yaml`. The first time it opens an existing config it also
-migrates any plaintext provider or TTS keys into the Keychain and strips them
-from the file. Development builds launched with `swift run` keep reading
+The packaged app keeps the keys you enter in Settings in the macOS Keychain, not
+in `config.yaml`. The first time it opens an existing config it also migrates any
+plaintext provider or TTS keys into the Keychain and strips them from the file. Development builds launched with `swift run` keep reading
 `api_key` from YAML; the packaged app uses the Keychain in both menu-bar and
 headless CLI modes.
 
 ### Commands in Settings
 
-Each command gets its own editor: hotkey recording that warns when another
-command already claims the combination, a model list pulled from the provider's
-`/v1/models` (type the ID when the endpoint has none), an API key check, and a
-Test section that runs the draft on a sample sentence before you save.
+Each command gets its own editor. It records the hotkey and warns when another
+command already claims the combination, lists the provider's models from
+`/v1/models` (type the ID when the endpoint has none), and checks the API key. A
+Test section runs the draft on a sample sentence before you save.
 
 ### Theme
 
@@ -238,8 +237,8 @@ UserDefaults rather than `config.yaml`.
 
 ## CLI
 
-The same pipeline without the GUI or any permissions, handy for iterating on
-prompts and providers:
+Holster runs the same pipeline without the GUI or any permissions, which helps
+when you are iterating on prompts and providers:
 
 ```sh
 Holster --list
@@ -254,9 +253,9 @@ never leak between configs.
 
 ## Known limits
 
-- Text-to-speech through CLIProxyAPI does not work, because `/v1/audio/speech`
-  is not proxied for subscription auth. Point `tts.base_url` straight at a
-  provider with a real API key, or use `provider: edge` or the macOS voice.
+- Text-to-speech through CLIProxyAPI does not work, because the proxy does not
+  forward `/v1/audio/speech` for subscription auth. Point `tts.base_url` straight
+  at a provider with a real API key, or use `provider: edge` or the macOS voice.
 - `provider: edge` rides Microsoft Edge's free read-aloud voices over a
   WebSocket. No API key, but it is an unofficial endpoint that may change. On
   any failure Holster drops back to the built-in macOS voice.
@@ -294,10 +293,10 @@ git push
 `VERSION` is the only place the number lives. `scripts/bundle.sh` reads it into
 the Info.plist, `scripts/release.sh` reads it for the tag and the zip name.
 
-Signing stays on the "Apple Development" certificate for now, which means every
-release needs the "Open Anyway" step described under Install. Moving to a paid
-Apple Developer account would let `notarytool` remove that step, at the cost of
-resetting everyone's Accessibility grant once when the certificate changes.
+Signing stays on the "Apple Development" certificate for now, so every release
+needs the "Open Anyway" step described under Install. A paid Apple Developer
+account would let `notarytool` remove that step, at the cost of resetting
+everyone's Accessibility grant once when the certificate changes.
 
 ## License
 
