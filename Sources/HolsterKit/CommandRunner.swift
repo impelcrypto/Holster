@@ -36,10 +36,6 @@ public final class CommandRunner {
             self?.currentTask?.cancel()
             viewModel?.finish()
         }
-        panel.autoCopyOnSelect = command.wantsCopyOnSelect
-        panel.onAutoCopy = { [weak viewModel] in
-            viewModel?.flashToast("Copied selection")
-        }
         panel.onClose = { [weak self] in
             self?.currentTask?.cancel()
         }

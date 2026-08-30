@@ -77,7 +77,9 @@ struct ResultView: View {
         // SwiftUI's .textSelection is NSTextView-backed; read its selection so
         // Speak targets exactly what the user highlighted.
         .onReceive(NotificationCenter.default.publisher(for: NSTextView.didChangeSelectionNotification)) { note in
-            guard let tv = note.object as? NSTextView else { return }
+            // Window filter: Settings text fields post this too, and with
+            // copy_on_select on they would otherwise overwrite the clipboard.
+            guard let tv = note.object as? NSTextView, tv.window is ResultPanel else { return }
             model.setSelectedText((tv.string as NSString).substring(with: tv.selectedRange()))
         }
     }
@@ -213,6 +215,7 @@ struct ResultView: View {
     }
 
     private func copy(_ text: String, closing: Bool) {
+        model.cancelAutoCopy()
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)

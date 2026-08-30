@@ -21,7 +21,11 @@ sitting in front of a subscription you already pay for. Prompts and commands are
 plain files under `~/.config/holster/`, so you can keep them in git. Built as a
 stable replacement for Raycast AI custom commands.
 
-<!-- TODO: demo GIF of the popup goes here -->
+<div align="center">
+
+<img src="assets/demo.gif" width="820" alt="Selecting a sentence in TextEdit, pressing the hotkey, and the Grammar Teacher command streaming corrections into a floating window">
+
+</div>
 
 ## Features
 

@@ -40,6 +40,29 @@ final class RunViewModelTests: XCTestCase {
         XCTAssertEqual(model.smartCopyText, "The corrected sentence.")
     }
 
+    /// A double/triple click selects without dragging, which the old
+    /// drag-distance gate skipped entirely.
+    func testCopyOnSelectCopiesAClickSelection() async throws {
+        let model = RunViewModel(
+            command: CommandConfig(name: "T", prompt: "t.md", model: "m", copyOnSelect: true))
+        var copied: String?
+        model.writeToPasteboard = { copied = $0 }
+        model.setSelectedText("a whole paragraph")
+        XCTAssertNil(copied)
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(copied, "a whole paragraph")
+        XCTAssertEqual(model.toast, "Copied selection")
+    }
+
+    func testCopyOnSelectOffDoesNotTouchThePasteboard() async throws {
+        let model = makeModel()
+        var copied: String?
+        model.writeToPasteboard = { copied = $0 }
+        model.setSelectedText("hello")
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertNil(copied)
+    }
+
     func testSetSelectedTextKeepsLastNonEmptySelection() {
         let model = makeModel()
         model.setSelectedText("  hello  ")

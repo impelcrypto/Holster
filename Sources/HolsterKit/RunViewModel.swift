@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor
@@ -29,9 +30,17 @@ public final class RunViewModel: ObservableObject {
     public var onCopied: (() -> Void)?
     public var onStop: (() -> Void)?
 
+    private let copyOnSelect: Bool
     private var accumulated = ""
     private var flushScheduled = false
     private var toastTask: Task<Void, Never>?
+    private var autoCopyTask: Task<Void, Never>?
+
+    /// Overridden in tests so they never clobber the real clipboard.
+    var writeToPasteboard: (String) -> Void = { text in
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
 
     public func flashToast(_ message: String) {
         toast = message
@@ -46,6 +55,7 @@ public final class RunViewModel: ObservableObject {
     public init(command: CommandConfig) {
         commandName = command.name
         modelName = command.model
+        copyOnSelect = command.wantsCopyOnSelect
     }
 
     public func beginStreaming() {
@@ -66,7 +76,29 @@ public final class RunViewModel: ObservableObject {
     /// editor (an empty-selection event) just before the button action reads it.
     public func setSelectedText(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty, trimmed != selectedText { selectedText = trimmed }
+        guard !trimmed.isEmpty else { return }
+        if trimmed != selectedText { selectedText = trimmed }
+        if copyOnSelect { scheduleAutoCopy(trimmed) }
+    }
+
+    /// ⌘↩ must win over a copy-on-select still waiting out its debounce.
+    public func cancelAutoCopy() {
+        autoCopyTask?.cancel()
+    }
+
+    /// Copy-on-select waits for the pointer to settle, so a drag copies once at
+    /// its end and a double/triple click copies the word or paragraph it lands on.
+    private func scheduleAutoCopy(_ text: String) {
+        autoCopyTask?.cancel()
+        autoCopyTask = Task { [weak self] in
+            while NSEvent.pressedMouseButtons & 1 == 1 {
+                try? await Task.sleep(for: .milliseconds(40))
+            }
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled, let self else { return }
+            self.writeToPasteboard(text)
+            self.flashToast("Copied selection")
+        }
     }
 
     /// MarkdownUI re-parses the whole document on every update, so deltas are
