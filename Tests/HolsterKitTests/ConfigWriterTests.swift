@@ -203,7 +203,7 @@ final class ConfigWriterTests: XCTestCase {
     func testGeminiPresetGetsCanonicalBaseURL() throws {
         var draft = ConfigStore.CommandDraft()
         draft.name = "Gemini"
-        draft.model = "gemini-3.7-flash"
+        draft.model = "models/gemini-3.7-flash"
         draft.provider = ProviderPreset.gemini
         draft.apiKey = "gemini-key"
         draft.promptText = "{selection}"
@@ -212,6 +212,10 @@ final class ConfigWriterTests: XCTestCase {
         let provider = try XCTUnwrap(store.config?.providers[ProviderPreset.gemini])
         XCTAssertEqual(provider.baseURL, ProviderPreset.geminiBaseURL)
         XCTAssertEqual(provider.apiKey, "gemini-key")
-        XCTAssertEqual(store.command(named: "Gemini")?.provider, ProviderPreset.gemini)
+        let command = try XCTUnwrap(store.command(named: "Gemini"))
+        XCTAssertEqual(command.provider, ProviderPreset.gemini)
+        XCTAssertEqual(command.model, "gemini-3.7-flash")
+        let yaml = try String(contentsOf: store.configFile, encoding: .utf8)
+        XCTAssertFalse(yaml.contains("models/gemini-3.7-flash"))
     }
 }

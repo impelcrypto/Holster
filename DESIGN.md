@@ -62,6 +62,13 @@ window-level layout and detail screens own their scrolling.
 - States: default and focused; focus uses the accent outline.
 - Accessibility: native text-field keyboard and accessibility behavior remains intact.
 
+### CredentialStatus
+
+- Structure: a compact icon-and-label row directly below the credential field, with an optional trailing removal action.
+- States: checking uses a progress indicator and secondary text; connected uses a system-green checkmark; failed uses a system-orange warning and retry action.
+- Content: status copy must distinguish secure storage from a verified provider connection and must never reproduce any credential characters.
+- Accessibility: pair every semantic color with an SF Symbol and explicit text; destructive removal requires confirmation.
+
 ### SegmentedPicker
 
 - Structure: native buttons inside an inset capsule.

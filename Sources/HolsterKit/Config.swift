@@ -131,7 +131,7 @@ public enum ConfigError: LocalizedError, Equatable {
 
 extension Config {
     public static func parse(yaml: String) throws -> Config {
-        let config: Config
+        var config: Config
         do {
             config = try YAMLDecoder().decode(Config.self, from: yaml)
         } catch let error as DecodingError {
@@ -140,6 +140,16 @@ extension Config {
             throw ConfigError.invalidYAML(error.localizedDescription)
         }
         try config.validate()
+        for index in config.commands.indices {
+            let providerName = try config.resolveProvider(for: config.commands[index]).name
+            config.commands[index].model = ProviderPreset.normalizedModelID(
+                config.commands[index].model, providerName: providerName)
+            if let fallbackProvider = config.commands[index].fallbackProvider,
+               let fallbackModel = config.commands[index].fallbackModel {
+                config.commands[index].fallbackModel = ProviderPreset.normalizedModelID(
+                    fallbackModel, providerName: fallbackProvider)
+            }
+        }
         return config
     }
 

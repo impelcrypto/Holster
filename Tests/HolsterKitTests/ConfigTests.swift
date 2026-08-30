@@ -63,6 +63,36 @@ final class ConfigTests: XCTestCase {
             explicit.resolvedReasoning(providerName: "cliproxy", model: "gpt-5.6-terra"), "high")
     }
 
+    func testGeminiResourceModelNameIsNormalizedWhenConfigLoads() throws {
+        let config = try Config.parse(yaml: """
+        providers:
+          gemini:
+            base_url: https://generativelanguage.googleapis.com/v1beta/openai
+        commands:
+          - name: Gemini
+            prompt: gemini.md
+            provider: gemini
+            model: models/gemini-3.7-flash
+        """)
+
+        XCTAssertEqual(config.commands[0].model, "gemini-3.7-flash")
+    }
+
+    func testModelsPrefixIsPreservedForOtherProviders() throws {
+        let config = try Config.parse(yaml: """
+        providers:
+          custom:
+            base_url: https://example.com/v1
+        commands:
+          - name: Custom
+            prompt: custom.md
+            provider: custom
+            model: models/custom-model
+        """)
+
+        XCTAssertEqual(config.commands[0].model, "models/custom-model")
+    }
+
     func testInvalidReasoningFails() {
         XCTAssertThrowsError(try Config.parse(yaml: """
         providers:

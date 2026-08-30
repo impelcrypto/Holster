@@ -163,6 +163,19 @@ public final class ConfigStore: ObservableObject {
         load()
     }
 
+    public func removeAPIKey(for providerName: String) throws {
+        guard var updated = config, updated.providers[providerName] != nil else {
+            throw ConfigError.validation("Unknown provider \"\(providerName)\"")
+        }
+        if apiKeyPersistence == .keychain {
+            try apiKeyStore.setAPIKey(nil, for: "provider:\(providerName)")
+        }
+        updated.providers[providerName]?.apiKey = nil
+        let persisted = try persistAPIKeys(from: updated)
+        try writeConfigFile(persisted)
+        load()
+    }
+
     private func loadAPIKeys(into config: Config) throws -> Config {
         guard apiKeyPersistence == .keychain else { return config }
         var hydrated = config

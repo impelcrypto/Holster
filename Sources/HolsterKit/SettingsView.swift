@@ -6,7 +6,7 @@ private let recorderName = KeyboardShortcuts.Name("settings.recorder.scratch")
 
 struct SettingsView: View {
     @ObservedObject var store: ConfigStore
-    @State private var selection: SidebarItem? = .general
+    @State private var selection: SidebarItem?
     @State private var showSavedToast = false
 
     enum SidebarItem: Hashable {
@@ -14,6 +14,11 @@ struct SettingsView: View {
         case speak
         case command(String)
         case newCommand
+    }
+
+    init(store: ConfigStore, initialSelection: SidebarItem? = .general) {
+        self.store = store
+        _selection = State(initialValue: initialSelection)
     }
 
     var body: some View {
@@ -286,6 +291,91 @@ struct SegmentedPicker: View {
     }
 }
 
+private enum CredentialConnectionState: Equatable {
+    case idle
+    case checking
+    case connected
+    case failed(String)
+}
+
+private struct CredentialStatus: View {
+    let state: CredentialConnectionState
+    let saved: Bool
+    let savedLabel: String
+    let onRetry: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        if saved || state != .idle {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    statusIcon
+                    Text(statusLabel)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(statusColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if case .failed(let detail) = state {
+                    Text(detail)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.orange)
+                        .lineLimit(2)
+                }
+                HStack(spacing: 8) {
+                    if case .failed = state {
+                        Button("Retry", action: onRetry)
+                            .buttonStyle(GhostButtonStyle())
+                    }
+                    Spacer()
+                    if saved {
+                        Button("Remove API Key", role: .destructive, action: onRemove)
+                            .buttonStyle(GhostButtonStyle(tint: .red))
+                    }
+                }
+            }
+            .frame(width: 280, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder private var statusIcon: some View {
+        switch state {
+        case .idle:
+            Image(systemName: "key.fill")
+                .foregroundStyle(.secondary)
+        case .checking:
+            ProgressView()
+                .controlSize(.small)
+        case .connected:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+        }
+    }
+
+    private var statusLabel: String {
+        switch state {
+        case .idle:
+            return savedLabel
+        case .checking:
+            return saved ? "\(savedLabel) · Checking connection…" : "Checking connection…"
+        case .connected:
+            return saved ? "\(savedLabel) · Connection successful" : "Connection successful"
+        case .failed:
+            return saved ? "\(savedLabel) · Connection failed" : "Connection failed"
+        }
+    }
+
+    private var statusColor: Color {
+        switch state {
+        case .connected: return .green
+        case .failed: return .orange
+        default: return .secondary
+        }
+    }
+}
+
 private struct CommandEditor: View {
     @ObservedObject var store: ConfigStore
     let originalName: String?
@@ -298,8 +388,11 @@ private struct CommandEditor: View {
     @State private var modelsError: String?
     @State private var errorMessage: String?
     @State private var confirmDelete = false
+    @State private var confirmRemoveAPIKey = false
     @State private var advancedExpanded = false
     @State private var fallbackModels: [String] = []
+    @State private var connectionState: CredentialConnectionState = .idle
+    @State private var modelFetchTask: Task<Void, Never>?
 
     private enum Field { case name, baseURL, apiKey, prompt }
     @FocusState private var focus: Field?
@@ -373,13 +466,21 @@ private struct CommandEditor: View {
                         if isPresetProvider {
                             RowDivider()
                             SettingRow(label: "API Key") {
-                                TextField(
-                                    "", text: $draft.apiKey,
-                                    prompt: Text(draft.provider == ProviderPreset.gemini ? "AIza…" : "sk-…"))
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .focused($focus, equals: .apiKey)
-                                    .onSubmit { fetchModels() }
-                                    .insetField(focused: focus == .apiKey)
+                                VStack(alignment: .leading, spacing: 7) {
+                                    SecureField(
+                                        "", text: $draft.apiKey,
+                                        prompt: Text("Enter a new API key"))
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .focused($focus, equals: .apiKey)
+                                        .onSubmit { fetchModels() }
+                                        .insetField(focused: focus == .apiKey)
+                                    CredentialStatus(
+                                        state: connectionState,
+                                        saved: hasStoredAPIKey && draft.apiKey.isEmpty,
+                                        savedLabel: storedAPIKeyLabel,
+                                        onRetry: fetchModels,
+                                        onRemove: { confirmRemoveAPIKey = true })
+                                }
                             }
                         }
                         RowDivider()
@@ -393,7 +494,7 @@ private struct CommandEditor: View {
                             .labelsHidden()
                             .fixedSize()
                         }
-                        if let modelsError {
+                        if let modelsError, !isPresetProvider {
                             HStack(spacing: 8) {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .font(.system(size: 11))
@@ -495,7 +596,13 @@ private struct CommandEditor: View {
             switch focus {
             case .name: draft.name = field.stringValue
             case .baseURL: draft.baseURL = field.stringValue
-            case .apiKey: draft.apiKey = field.stringValue
+            case .apiKey:
+                guard draft.apiKey != field.stringValue else { return }
+                draft.apiKey = field.stringValue
+                modelFetchTask?.cancel()
+                models = []
+                modelsError = nil
+                connectionState = .idle
             default: break
             }
         }
@@ -513,7 +620,14 @@ private struct CommandEditor: View {
         } message: {
             Text(errorMessage ?? "")
         }
+        .alert("Remove saved API key?", isPresented: $confirmRemoveAPIKey) {
+            Button("Remove", role: .destructive) { removeAPIKey() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The provider and its commands will be kept.")
+        }
         .onAppear(perform: loadDraft)
+        .onDisappear { modelFetchTask?.cancel() }
     }
 
     /// Accordion: header toggles the fallback card, collapsed by default
@@ -578,6 +692,15 @@ private struct CommandEditor: View {
         ((store.config?.providers.keys).map(Array.init) ?? []).sorted()
     }
 
+    private var hasStoredAPIKey: Bool {
+        guard let apiKey = store.config?.providers[draft.provider]?.apiKey else { return false }
+        return !apiKey.isEmpty
+    }
+
+    private var storedAPIKeyLabel: String {
+        store.apiKeyPersistence == .keychain ? "API key saved in Keychain" : "API key saved"
+    }
+
     private var fallbackProviderBinding: Binding<String> {
         Binding(
             get: { draft.fallbackProvider },
@@ -599,7 +722,9 @@ private struct CommandEditor: View {
             guard let fetched = try? await LLMClient.listModels(
                 baseURL: provider.baseURL, apiKey: provider.apiKey),
                 draft.fallbackProvider == requested else { return }
-            fallbackModels = fetched
+            fallbackModels = fetched.map {
+                ProviderPreset.normalizedModelID($0, providerName: requested)
+            }
         }
     }
 
@@ -666,7 +791,6 @@ private struct CommandEditor: View {
     private func syncProviderFields() {
         if let saved = store.config?.providers[draft.provider] {
             draft.baseURL = saved.baseURL
-            draft.apiKey = saved.apiKey ?? ""
         } else {
             switch draft.provider {
             case ProviderPreset.openCodeGo:
@@ -676,8 +800,9 @@ private struct CommandEditor: View {
             default:
                 draft.baseURL = ""
             }
-            draft.apiKey = ""
         }
+        draft.apiKey = ""
+        connectionState = .idle
         // No "None" on OpenCode Go (its models all think by default).
         if draft.provider == ProviderPreset.openCodeGo, draft.reasoning.isEmpty {
             draft.reasoning = "low"
@@ -685,8 +810,10 @@ private struct CommandEditor: View {
     }
 
     private func fetchModels() {
+        modelFetchTask?.cancel()
         models = []
         modelsError = nil
+        connectionState = .idle
         let baseURL: String
         let apiKey: String?
         if isPresetProvider {
@@ -698,7 +825,9 @@ private struct CommandEditor: View {
             default:
                 baseURL = draft.baseURL
             }
-            apiKey = draft.apiKey
+            apiKey = draft.apiKey.isEmpty
+                ? store.config?.providers[draft.provider]?.apiKey
+                : draft.apiKey
         } else if let provider = store.config?.providers[draft.provider] {
             baseURL = provider.baseURL
             apiKey = provider.apiKey
@@ -707,19 +836,28 @@ private struct CommandEditor: View {
         }
         guard !baseURL.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         if [ProviderPreset.openCodeGo, ProviderPreset.gemini].contains(draft.provider),
-           draft.apiKey.isEmpty { return }
+           apiKey?.isEmpty != false {
+            connectionState = .idle
+            return
+        }
         let requestedProvider = draft.provider
-        Task { @MainActor in
+        if isPresetProvider { connectionState = .checking }
+        modelFetchTask = Task { @MainActor in
             do {
                 let fetched = try await LLMClient.listModels(baseURL: baseURL, apiKey: apiKey)
-                guard draft.provider == requestedProvider else { return }
-                models = fetched
-                if draft.model.isEmpty, let first = fetched.first {
+                guard !Task.isCancelled, draft.provider == requestedProvider else { return }
+                let normalized = fetched.map {
+                    ProviderPreset.normalizedModelID($0, providerName: requestedProvider)
+                }
+                models = normalized
+                if isPresetProvider { connectionState = .connected }
+                if draft.model.isEmpty, let first = normalized.first {
                     draft.model = first
                 }
             } catch {
-                guard draft.provider == requestedProvider else { return }
+                guard !Task.isCancelled, draft.provider == requestedProvider else { return }
                 modelsError = error.localizedDescription
+                if isPresetProvider { connectionState = .failed(error.localizedDescription) }
             }
         }
     }
@@ -727,9 +865,23 @@ private struct CommandEditor: View {
     private func save() {
         do {
             try store.saveCommand(originalName: originalName, draft: draft)
-            // Same-name saves don't rebuild the editor, so re-disable here.
+            draft.apiKey = ""
             savedDraft = draft
+            fetchModels()
             onSaved(draft.name)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func removeAPIKey() {
+        do {
+            modelFetchTask?.cancel()
+            try store.removeAPIKey(for: draft.provider)
+            draft.apiKey = ""
+            models = []
+            modelsError = nil
+            connectionState = .idle
         } catch {
             errorMessage = error.localizedDescription
         }

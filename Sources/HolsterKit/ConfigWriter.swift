@@ -7,6 +7,11 @@ public enum ProviderPreset {
     public static let gemini = "gemini"
     public static let geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
     public static let custom = "custom"
+
+    public static func normalizedModelID(_ model: String, providerName: String) -> String {
+        guard providerName == gemini, model.hasPrefix("models/") else { return model }
+        return String(model.dropFirst("models/".count))
+    }
 }
 
 extension CommandConfig {
@@ -79,7 +84,7 @@ extension ConfigStore {
             model: command.model,
             reasoning: command.reasoning ?? "",
             baseURL: provider?.baseURL ?? "",
-            apiKey: provider?.apiKey ?? "",
+            apiKey: "",
             copyOnSelect: command.wantsCopyOnSelect,
             promptFile: command.prompt,
             promptText: (try? promptText(for: command)) ?? "",
@@ -101,16 +106,20 @@ extension ConfigStore {
             throw ConfigError.validation("Model cannot be empty")
         }
 
+        let apiKey = draft.apiKey.isEmpty
+            ? config.providers[draft.provider]?.apiKey
+            : draft.apiKey
+
         switch draft.provider {
         case ProviderPreset.openCodeGo:
             // ponytail: preset always re-asserts the canonical URL; hand-edits lose.
             config.providers[ProviderPreset.openCodeGo] = ProviderConfig(
                 baseURL: ProviderPreset.openCodeGoBaseURL,
-                apiKey: draft.apiKey)
+                apiKey: apiKey)
         case ProviderPreset.gemini:
             config.providers[ProviderPreset.gemini] = ProviderConfig(
                 baseURL: ProviderPreset.geminiBaseURL,
-                apiKey: draft.apiKey)
+                apiKey: apiKey)
         case ProviderPreset.custom:
             let baseURL = draft.baseURL.trimmingCharacters(in: .whitespaces)
             guard !baseURL.isEmpty else {
@@ -118,7 +127,7 @@ extension ConfigStore {
             }
             config.providers[ProviderPreset.custom] = ProviderConfig(
                 baseURL: baseURL,
-                apiKey: draft.apiKey)
+                apiKey: apiKey)
         default:
             break
         }
@@ -130,11 +139,16 @@ extension ConfigStore {
             hotkey: draft.hotkey.isEmpty ? nil : draft.hotkey,
             prompt: promptFile,
             provider: draft.provider.isEmpty ? nil : draft.provider,
-            model: draft.model.trimmingCharacters(in: .whitespaces),
+            model: ProviderPreset.normalizedModelID(
+                draft.model.trimmingCharacters(in: .whitespaces),
+                providerName: draft.provider),
             reasoning: draft.reasoning.isEmpty ? nil : draft.reasoning,
             copyOnSelect: draft.copyOnSelect ? true : nil,
             fallbackProvider: hasFallback ? draft.fallbackProvider : nil,
-            fallbackModel: hasFallback && !draft.fallbackModel.isEmpty ? draft.fallbackModel : nil)
+            fallbackModel: hasFallback && !draft.fallbackModel.isEmpty
+                ? ProviderPreset.normalizedModelID(
+                    draft.fallbackModel, providerName: draft.fallbackProvider)
+                : nil)
 
         if let originalName, let index = config.commands.firstIndex(where: { $0.name == originalName }) {
             config.commands[index] = command

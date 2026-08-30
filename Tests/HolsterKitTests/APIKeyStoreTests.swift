@@ -80,6 +80,109 @@ final class APIKeyStoreTests: XCTestCase {
                 .contains("api_key"))
     }
 
+    func testPackagedSaveWithBlankPresetAPIKeyPreservesExistingKeyAndKeepsYAMLSecretFree() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        fixture.apiKeys.values["provider:\(ProviderPreset.openCodeGo)"] = "sk-existing"
+
+        var draft = ConfigStore.CommandDraft()
+        draft.name = "Grammar Teacher"
+        draft.model = "model-a"
+        draft.provider = ProviderPreset.openCodeGo
+        draft.promptText = "{selection}"
+
+        try fixture.store.saveCommand(originalName: nil, draft: draft)
+
+        XCTAssertEqual(
+            fixture.apiKeys.values["provider:\(ProviderPreset.openCodeGo)"], "sk-existing")
+        let yaml = try String(contentsOf: fixture.store.configFile, encoding: .utf8)
+        XCTAssertFalse(yaml.contains("sk-existing"))
+        XCTAssertFalse(yaml.contains("api_key"))
+        XCTAssertEqual(
+            fixture.store.config?.providers[ProviderPreset.openCodeGo]?.baseURL,
+            ProviderPreset.openCodeGoBaseURL)
+    }
+
+    func testPackagedSaveWithBlankCustomAPIKeyPreservesExistingKeyAndKeepsYAMLSecretFree() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        fixture.apiKeys.values["provider:\(ProviderPreset.custom)"] = "sk-existing"
+
+        var draft = ConfigStore.CommandDraft()
+        draft.name = "Router"
+        draft.model = "model-a"
+        draft.provider = ProviderPreset.custom
+        draft.baseURL = "https://openrouter.ai/api/v1"
+        draft.promptText = "{selection}"
+
+        try fixture.store.saveCommand(originalName: nil, draft: draft)
+
+        XCTAssertEqual(
+            fixture.apiKeys.values["provider:\(ProviderPreset.custom)"], "sk-existing")
+        let yaml = try String(contentsOf: fixture.store.configFile, encoding: .utf8)
+        XCTAssertFalse(yaml.contains("sk-existing"))
+        XCTAssertFalse(yaml.contains("api_key"))
+        XCTAssertEqual(
+            fixture.store.config?.providers[ProviderPreset.custom]?.baseURL,
+            "https://openrouter.ai/api/v1")
+    }
+
+    func testRemoveAPIKeyDeletesKeychainValueButPreservesProviderConfiguration() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        fixture.apiKeys.values["provider:local"] = "sk-remove"
+        let originalProvider = try XCTUnwrap(fixture.store.config?.providers["local"])
+
+        try fixture.store.removeAPIKey(for: "local")
+
+        XCTAssertNil(fixture.apiKeys.values["provider:local"])
+        let provider = try XCTUnwrap(fixture.store.config?.providers["local"])
+        XCTAssertEqual(provider.baseURL, originalProvider.baseURL)
+        XCTAssertEqual(provider.apiKey, originalProvider.apiKey)
+        XCTAssertNotNil(fixture.store.command(named: "Existing"))
+    }
+
+    func testRemoveAPIKeyKeepsOtherProviderSecretsOutOfYAML() throws {
+        let fixture = try makeFixture(load: false)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        fixture.apiKeys.values["provider:local"] = "sk-local"
+        fixture.apiKeys.values["provider:backup"] = "sk-backup"
+        try """
+        providers:
+          local:
+            base_url: http://127.0.0.1:9999/v1
+          backup:
+            base_url: http://127.0.0.1:9998/v1
+        default_provider: local
+        commands:
+          - name: Existing
+            prompt: existing.md
+            model: model-a
+        """.write(
+            to: fixture.store.configFile,
+            atomically: true,
+            encoding: .utf8)
+        fixture.store.load()
+
+        try fixture.store.removeAPIKey(for: "local")
+
+        let yaml = try String(contentsOf: fixture.store.configFile, encoding: .utf8)
+        XCTAssertFalse(yaml.contains("sk-local"))
+        XCTAssertFalse(yaml.contains("sk-backup"))
+        XCTAssertEqual(fixture.apiKeys.values["provider:backup"], "sk-backup")
+    }
+
+    func testDraftDoesNotExposeHydratedAPIKey() throws {
+        let fixture = try makeFixture(load: false)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        fixture.apiKeys.values["provider:local"] = "sk-hydrated"
+        fixture.store.load()
+
+        let command = try XCTUnwrap(fixture.store.command(named: "Existing"))
+        XCTAssertEqual(fixture.store.config?.providers["local"]?.apiKey, "sk-hydrated")
+        XCTAssertEqual(fixture.store.draft(for: command).apiKey, "")
+    }
+
     private func makeFixture(apiKey: String? = nil, load: Bool = true) throws -> (
         directory: URL, store: ConfigStore, apiKeys: TestAPIKeyStore
     ) {
