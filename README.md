@@ -55,6 +55,7 @@ Apple Silicon only, macOS 14 or later. There is no Intel build.
 
 ```sh
 brew tap impelcrypto/tap
+brew trust impelcrypto/tap   # Homebrew refuses casks from taps you have not trusted
 brew install --cask holster
 ```
 
