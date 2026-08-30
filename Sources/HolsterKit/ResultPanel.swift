@@ -13,12 +13,10 @@ final class ResultPanel: NSPanel {
     private var userResizedPanel = false
     private var programmaticFrameChange = false
 
-    /// Per-command copy_on_select: a finished drag selection inside the panel
-    /// copies the selected text (normalized to plain text).
-    var autoCopyOnSelect = false
-    var onAutoCopy: (() -> Void)?
+    /// Fires on every close (Esc, ⌘↩ copy, red button) so the owner can stop
+    /// the in-flight stream instead of letting it burn tokens unseen.
+    var onClose: (() -> Void)?
     private var mouseMonitor: Any?
-    private var draggingSelection = false
 
     init() {
         super.init(
@@ -28,7 +26,9 @@ final class ResultPanel: NSPanel {
             defer: false)
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
-        isMovableByWindowBackground = true
+        // SwiftUI hands the window every pixel that isn't a glyph, so this
+        // dragged the panel whenever a selection started a hair off the text.
+        isMovableByWindowBackground = false
         isReleasedWhenClosed = false
         // Transparent window: the content's NSVisualEffectView supplies the
         // blurred backdrop; titled windows still clip to rounded corners.
@@ -44,52 +44,16 @@ final class ResultPanel: NSPanel {
         NotificationCenter.default.addObserver(
             self, selector: #selector(frameDidResize), name: NSWindow.didResizeNotification, object: self)
 
-        // Only mouseDown is observable here: SwiftUI's text-selection gesture
-        // runs a mouse-tracking loop that swallows the dragged/up events
-        // before they reach local monitors. The drag end is detected by
-        // polling the button state instead.
+        // The app is never active, so AppKit spends the first click on an
+        // unfocused panel making it key. Taking key here delivers that click.
         mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
-            self?.handleMouseDown(event)
+            if let self, event.window === self, !self.isKeyWindow { self.makeKey() }
             return event
         }
     }
 
-    private func handleMouseDown(_ event: NSEvent) {
-        guard event.window === self, autoCopyOnSelect, !draggingSelection else { return }
-        draggingSelection = true
-        let start = NSEvent.mouseLocation
-        Task { @MainActor [weak self] in
-            var moved = false
-            while NSEvent.pressedMouseButtons & 1 == 1 {
-                let now = NSEvent.mouseLocation
-                if hypot(now.x - start.x, now.y - start.y) > 4 { moved = true }
-                try? await Task.sleep(for: .milliseconds(40))
-            }
-            guard let self else { return }
-            self.draggingSelection = false
-            if moved, self.isVisible {
-                self.copySelectionIfAny()
-            }
-        }
-    }
-
-    /// Fires the responder-chain copy after the drag; if something landed on
-    /// the pasteboard, rewrite it as plain text and report success.
-    private func copySelectionIfAny() {
-        let pasteboard = NSPasteboard.general
-        let before = pasteboard.changeCount
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                guard pasteboard.changeCount != before,
-                      let plain = pasteboard.string(forType: .string),
-                      !plain.isEmpty
-                else { return }
-                pasteboard.clearContents()
-                pasteboard.setString(plain, forType: .string)
-                self?.onAutoCopy?()
-            }
-        }
+    deinit {
+        if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
     }
 
     @objc private func frameDidMove() {
@@ -103,6 +67,11 @@ final class ResultPanel: NSPanel {
     /// Esc
     override func cancelOperation(_ sender: Any?) {
         close()
+    }
+
+    override func close() {
+        onClose?()
+        super.close()
     }
 
     func present<Content: View>(_ view: Content) {

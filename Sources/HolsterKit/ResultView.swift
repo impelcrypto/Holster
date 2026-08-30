@@ -27,20 +27,24 @@ private struct ContentHeightKey: PreferenceKey {
 }
 
 private struct PulsingDot: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dimmed = false
 
     var body: some View {
         Circle()
             .fill(HolsterTheme.accent)
             .frame(width: 7, height: 7)
-            .opacity(dimmed ? 0.25 : 1)
-            .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: dimmed)
+            .opacity(reduceMotion ? 1 : (dimmed ? 0.25 : 1))
+            .animation(
+                reduceMotion ? nil : .easeInOut(duration: 0.7).repeatForever(autoreverses: true),
+                value: dimmed)
             .onAppear { dimmed = true }
     }
 }
 
 struct ResultView: View {
     @ObservedObject var model: RunViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var onContentHeight: (CGFloat) -> Void = { _ in }
 
     var body: some View {
@@ -68,12 +72,14 @@ struct ResultView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: model.toast)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: model.toast)
         .tint(HolsterTheme.accentDeep)
         // SwiftUI's .textSelection is NSTextView-backed; read its selection so
         // Speak targets exactly what the user highlighted.
         .onReceive(NotificationCenter.default.publisher(for: NSTextView.didChangeSelectionNotification)) { note in
-            guard let tv = note.object as? NSTextView else { return }
+            // Window filter: Settings text fields post this too, and with
+            // copy_on_select on they would otherwise overwrite the clipboard.
+            guard let tv = note.object as? NSTextView, tv.window is ResultPanel else { return }
             model.setSelectedText((tv.string as NSString).substring(with: tv.selectedRange()))
         }
     }
@@ -94,7 +100,7 @@ struct ResultView: View {
                 .background(Color.primary.opacity(0.07), in: Capsule())
                 .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
             Spacer()
-            if model.state == .capturing || model.state == .streaming {
+            if model.state == .streaming {
                 Text(model.isReasoning && model.markdown.isEmpty ? "Reasoning…" : "Generating…")
                     .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
@@ -109,10 +115,6 @@ struct ResultView: View {
     @ViewBuilder
     private var content: some View {
         switch model.state {
-        case .capturing:
-            Spacer()
-            Text("Capturing selection…").foregroundStyle(.secondary)
-            Spacer()
         case .failed(let message) where model.fullText.isEmpty:
             Spacer()
             VStack(spacing: 12) {
@@ -168,11 +170,28 @@ struct ResultView: View {
                 .buttonStyle(GhostButtonStyle())
                 .keyboardShortcut("r", modifiers: .command)
             }
-            Spacer()
-            Button("Speak") { model.onSpeak?(model.selectedText) }
+            if model.state == .streaming {
+                Button {
+                    model.onStop?()
+                } label: {
+                    HStack(spacing: 5) {
+                        Text("Stop")
+                        Text("⌘.")
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
                 .buttonStyle(GhostButtonStyle())
-                .keyboardShortcut("s", modifiers: .command)
-                .disabled(model.selectedText.isEmpty)
+                .keyboardShortcut(".", modifiers: .command)
+            }
+            Spacer()
+            // Nothing highlighted = speak the whole response.
+            Button("Speak") {
+                model.onSpeak?(model.selectedText.isEmpty ? model.fullText : model.selectedText)
+            }
+            .buttonStyle(GhostButtonStyle())
+            .keyboardShortcut("s", modifiers: .command)
+            .disabled(model.selectedText.isEmpty && model.fullText.isEmpty)
             Button("Copy All") { copy(model.fullText, closing: false) }
                 .buttonStyle(GhostButtonStyle())
                 .keyboardShortcut(.return, modifiers: [.command, .shift])
@@ -196,6 +215,7 @@ struct ResultView: View {
     }
 
     private func copy(_ text: String, closing: Bool) {
+        model.cancelAutoCopy()
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)

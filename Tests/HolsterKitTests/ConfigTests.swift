@@ -37,6 +37,37 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(resolved.provider.baseURL, "http://127.0.0.1:8317/v1")
     }
 
+    func testRejectsDuplicateHotkeys() {
+        let yaml = """
+        providers:
+          p:
+            base_url: http://localhost:1/v1
+        commands:
+          - name: A
+            hotkey: cmd+shift+g
+            prompt: a.md
+            model: m
+          - name: B
+            hotkey: shift+cmd+g
+            prompt: b.md
+            model: m
+        """
+        XCTAssertThrowsError(try Config.parse(yaml: yaml)) { error in
+            guard case ConfigError.validation(let message) = error else {
+                return XCTFail("Expected validation error, got \(error)")
+            }
+            XCTAssertTrue(message.contains("hotkey"))
+        }
+    }
+
+    func testInsecureRemoteURLDetection() {
+        XCTAssertFalse(isInsecureRemoteURL("http://127.0.0.1:8317/v1"))
+        XCTAssertFalse(isInsecureRemoteURL("http://localhost:11434/v1"))
+        XCTAssertFalse(isInsecureRemoteURL("https://openrouter.ai/api/v1"))
+        XCTAssertTrue(isInsecureRemoteURL("http://192.168.1.20:11434/v1"))
+        XCTAssertTrue(isInsecureRemoteURL("http://example.com/v1"))
+    }
+
     func testLegacyKeysAreIgnored() throws {
         let config = try Config.parse(yaml: """
         providers:
@@ -61,6 +92,36 @@ final class ConfigTests: XCTestCase {
         let explicit = CommandConfig(name: "X", prompt: "x.md", model: "m", reasoning: "high")
         XCTAssertEqual(
             explicit.resolvedReasoning(providerName: "cliproxy", model: "gpt-5.6-terra"), "high")
+    }
+
+    func testGeminiResourceModelNameIsNormalizedWhenConfigLoads() throws {
+        let config = try Config.parse(yaml: """
+        providers:
+          gemini:
+            base_url: https://generativelanguage.googleapis.com/v1beta/openai
+        commands:
+          - name: Gemini
+            prompt: gemini.md
+            provider: gemini
+            model: models/gemini-3.7-flash
+        """)
+
+        XCTAssertEqual(config.commands[0].model, "gemini-3.7-flash")
+    }
+
+    func testModelsPrefixIsPreservedForOtherProviders() throws {
+        let config = try Config.parse(yaml: """
+        providers:
+          custom:
+            base_url: https://example.com/v1
+        commands:
+          - name: Custom
+            prompt: custom.md
+            provider: custom
+            model: models/custom-model
+        """)
+
+        XCTAssertEqual(config.commands[0].model, "models/custom-model")
     }
 
     func testInvalidReasoningFails() {

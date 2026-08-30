@@ -82,6 +82,35 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(reparsed.commands.count, 1)
     }
 
+    func testSaveTTSPreservesConfiguredEndpoint() throws {
+        try """
+        providers:
+          local:
+            base_url: http://127.0.0.1:9999/v1
+        default_provider: local
+        tts:
+          base_url: https://api.openai.com/v1
+          model: gpt-4o-mini-tts
+          voice: alloy
+        commands:
+          - name: Existing
+            prompt: existing.md
+            model: model-a
+        """.write(
+            to: directory.appendingPathComponent("config.yaml"),
+            atomically: true, encoding: .utf8)
+        store.load()
+        XCTAssertNil(store.lastError)
+
+        try store.saveTTS(voice: "en-US-EmmaNeural")
+
+        // Picking a voice must not clobber an OpenAI-compatible TTS setup.
+        XCTAssertEqual(store.config?.tts?.baseURL, "https://api.openai.com/v1")
+        XCTAssertNil(store.config?.tts?.provider)
+        XCTAssertEqual(store.config?.tts?.model, "gpt-4o-mini-tts")
+        XCTAssertEqual(store.config?.tts?.voice, "en-US-EmmaNeural")
+    }
+
     func testDeleteRemovesCommandButKeepsPromptFile() throws {
         try store.deleteCommand(named: "Existing")
         XCTAssertNil(store.command(named: "Existing"))
@@ -198,5 +227,74 @@ final class ConfigWriterTests: XCTestCase {
         let provider = try XCTUnwrap(store.config?.providers[ProviderPreset.openCodeGo])
         XCTAssertEqual(provider.baseURL, ProviderPreset.openCodeGoBaseURL)
         XCTAssertEqual(provider.apiKey, "sk-go")
+    }
+
+    func testPromptTextRejectsTraversal() throws {
+        try "secret".write(
+            to: directory.appendingPathComponent("secret.md"),
+            atomically: true, encoding: .utf8)
+        let command = CommandConfig(name: "Evil", prompt: "../secret.md", model: "m")
+        XCTAssertThrowsError(try store.promptText(for: command)) { error in
+            guard case ConfigError.validation = error else {
+                return XCTFail("Expected validation error, got \(error)")
+            }
+        }
+    }
+
+    func testPromptTextRejectsSymlinkEscape() throws {
+        let outside = directory.appendingPathComponent("outside.md")
+        try "outside".write(to: outside, atomically: true, encoding: .utf8)
+        let link = directory.appendingPathComponent("prompts/link.md")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside)
+        let command = CommandConfig(name: "Evil", prompt: "link.md", model: "m")
+        XCTAssertThrowsError(try store.promptText(for: command))
+    }
+
+    func testSaveRejectsPromptFileOutsidePromptsDirectory() throws {
+        let existing = try XCTUnwrap(store.command(named: "Existing"))
+        var draft = store.draft(for: existing)
+        draft.promptFile = "../escape.md"
+        draft.promptText = "evil"
+        XCTAssertThrowsError(try store.saveCommand(originalName: "Existing", draft: draft))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("escape.md").path))
+    }
+
+    func testSaveAppliesRestrictivePermissions() throws {
+        var draft = ConfigStore.CommandDraft()
+        draft.name = "Perms"
+        draft.model = "m"
+        draft.provider = "local"
+        draft.promptText = "{selection}"
+        try store.saveCommand(originalName: nil, draft: draft)
+
+        let fm = FileManager.default
+        let configMode = try XCTUnwrap(
+            fm.attributesOfItem(atPath: store.configFile.path)[.posixPermissions] as? NSNumber)
+        XCTAssertEqual(configMode.uint16Value, 0o600)
+        let promptMode = try XCTUnwrap(
+            fm.attributesOfItem(
+                atPath: directory.appendingPathComponent("prompts/perms.md").path)[
+                    .posixPermissions] as? NSNumber)
+        XCTAssertEqual(promptMode.uint16Value, 0o600)
+    }
+
+    func testGeminiPresetGetsCanonicalBaseURL() throws {
+        var draft = ConfigStore.CommandDraft()
+        draft.name = "Gemini"
+        draft.model = "models/gemini-3.7-flash"
+        draft.provider = ProviderPreset.gemini
+        draft.apiKey = "gemini-key"
+        draft.promptText = "{selection}"
+        try store.saveCommand(originalName: nil, draft: draft)
+
+        let provider = try XCTUnwrap(store.config?.providers[ProviderPreset.gemini])
+        XCTAssertEqual(provider.baseURL, ProviderPreset.geminiBaseURL)
+        XCTAssertEqual(provider.apiKey, "gemini-key")
+        let command = try XCTUnwrap(store.command(named: "Gemini"))
+        XCTAssertEqual(command.provider, ProviderPreset.gemini)
+        XCTAssertEqual(command.model, "gemini-3.7-flash")
+        let yaml = try String(contentsOf: store.configFile, encoding: .utf8)
+        XCTAssertFalse(yaml.contains("models/gemini-3.7-flash"))
     }
 }

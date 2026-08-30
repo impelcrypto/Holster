@@ -14,13 +14,17 @@ public final class Speaker {
     public func speak(_ text: String, config: TTSConfig?) {
         stop()
         task = Task {
-            if let data = await fetchAudio(text: text, config: config) {
-                // A newer speak()/stop() may have superseded this task mid-fetch.
-                guard !Task.isCancelled, let player = try? AVAudioPlayer(data: data) else { return }
+            // A newer speak()/stop() may have superseded this task mid-fetch.
+            guard !Task.isCancelled else { return }
+            if let data = await fetchAudio(text: text, config: config),
+               let player = try? AVAudioPlayer(data: data) {
+                guard !Task.isCancelled else { return }
                 self.player = player
                 player.play()
                 return
             }
+            // Undecodable data (empty Edge payload, non-audio 200 body) falls
+            // back to the built-in voice just like a fetch failure does.
             guard !Task.isCancelled else { return }
             speakBuiltIn(text, voice: config?.voice)
         }

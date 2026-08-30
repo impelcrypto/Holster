@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="Holster"
 BUNDLE_ID="app.holster"
-VERSION="0.1.0"
+VERSION=$(cat VERSION)
 # .noindex keeps Spotlight from listing the built .app as a second Holster.
 BUILD_DIR="build.noindex"
 APP="$BUILD_DIR/$APP_NAME.app"

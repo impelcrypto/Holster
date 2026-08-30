@@ -28,7 +28,25 @@ public enum SelectionCapture {
     }
 
     @MainActor
+    private static var current: Task<String, Error>?
+
+    /// Captures are serialized: a new hotkey press cancels the previous
+    /// capture and waits for its clipboard restore before snapshotting, so two
+    /// rapid presses can't corrupt the user's clipboard.
+    @MainActor
     public static func capture() async throws -> String {
+        let previous = current
+        let task = Task {
+            previous?.cancel()
+            _ = await previous?.result
+            return try await performCapture()
+        }
+        current = task
+        return try await task.value
+    }
+
+    @MainActor
+    private static func performCapture() async throws -> String {
         guard hasPermission else {
             requestPermission()
             throw CaptureError.accessibilityDenied
@@ -37,22 +55,27 @@ public enum SelectionCapture {
         let pasteboard = NSPasteboard.general
         let saved = snapshot(pasteboard)
         let before = pasteboard.changeCount
+        // Restore runs on every exit — including cancellation — as long as the
+        // synthetic ⌘C landed. A copy arriving after the poll window still
+        // clobbers the clipboard; ponytail: unfixable without waiting forever.
+        defer {
+            if pasteboard.changeCount != before {
+                restore(pasteboard, items: saved)
+            }
+        }
 
         postCmdC()
 
         var text: String?
         for _ in 0..<50 {
             try? await Task.sleep(for: .milliseconds(20))
+            try Task.checkCancellation()
             if pasteboard.changeCount != before {
                 // One more beat so the source app finishes writing all types.
                 try? await Task.sleep(for: .milliseconds(30))
                 text = pasteboard.string(forType: .string)
                 break
             }
-        }
-
-        if pasteboard.changeCount != before {
-            restore(pasteboard, items: saved)
         }
 
         guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -64,9 +87,10 @@ public enum SelectionCapture {
     // MARK: - Internals
 
     /// The hotkey's own modifiers are still physically held here, so the
-    /// event's flags are forced to ⌘ only.
+    /// event's flags are forced to ⌘ only; the private source keeps the
+    /// session's live modifier state from bleeding into the synthetic event.
     private static func postCmdC() {
-        let source = CGEventSource(stateID: .combinedSessionState)
+        let source = CGEventSource(stateID: .privateState)
         let keyCode = CGKeyCode(kVK_ANSI_C)
         let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
         let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)

@@ -1,11 +1,17 @@
 import Foundation
-import Yams
 
 /// Providers the GUI can create on demand, without hand-editing config.yaml.
 public enum ProviderPreset {
     public static let openCodeGo = "opencode-go"
     public static let openCodeGoBaseURL = "https://opencode.ai/zen/go/v1"
+    public static let gemini = "gemini"
+    public static let geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
     public static let custom = "custom"
+
+    public static func normalizedModelID(_ model: String, providerName: String) -> String {
+        guard providerName == gemini, model.hasPrefix("models/") else { return model }
+        return String(model.dropFirst("models/".count))
+    }
 }
 
 extension CommandConfig {
@@ -78,7 +84,7 @@ extension ConfigStore {
             model: command.model,
             reasoning: command.reasoning ?? "",
             baseURL: provider?.baseURL ?? "",
-            apiKey: provider?.apiKey ?? "",
+            apiKey: "",
             copyOnSelect: command.wantsCopyOnSelect,
             promptFile: command.prompt,
             promptText: (try? promptText(for: command)) ?? "",
@@ -100,12 +106,20 @@ extension ConfigStore {
             throw ConfigError.validation("Model cannot be empty")
         }
 
+        let apiKey = draft.apiKey.isEmpty
+            ? config.providers[draft.provider]?.apiKey
+            : draft.apiKey
+
         switch draft.provider {
         case ProviderPreset.openCodeGo:
             // ponytail: preset always re-asserts the canonical URL; hand-edits lose.
             config.providers[ProviderPreset.openCodeGo] = ProviderConfig(
                 baseURL: ProviderPreset.openCodeGoBaseURL,
-                apiKey: draft.apiKey)
+                apiKey: apiKey)
+        case ProviderPreset.gemini:
+            config.providers[ProviderPreset.gemini] = ProviderConfig(
+                baseURL: ProviderPreset.geminiBaseURL,
+                apiKey: apiKey)
         case ProviderPreset.custom:
             let baseURL = draft.baseURL.trimmingCharacters(in: .whitespaces)
             guard !baseURL.isEmpty else {
@@ -113,7 +127,7 @@ extension ConfigStore {
             }
             config.providers[ProviderPreset.custom] = ProviderConfig(
                 baseURL: baseURL,
-                apiKey: draft.apiKey)
+                apiKey: apiKey)
         default:
             break
         }
@@ -125,11 +139,16 @@ extension ConfigStore {
             hotkey: draft.hotkey.isEmpty ? nil : draft.hotkey,
             prompt: promptFile,
             provider: draft.provider.isEmpty ? nil : draft.provider,
-            model: draft.model.trimmingCharacters(in: .whitespaces),
+            model: ProviderPreset.normalizedModelID(
+                draft.model.trimmingCharacters(in: .whitespaces),
+                providerName: draft.provider),
             reasoning: draft.reasoning.isEmpty ? nil : draft.reasoning,
             copyOnSelect: draft.copyOnSelect ? true : nil,
             fallbackProvider: hasFallback ? draft.fallbackProvider : nil,
-            fallbackModel: hasFallback && !draft.fallbackModel.isEmpty ? draft.fallbackModel : nil)
+            fallbackModel: hasFallback && !draft.fallbackModel.isEmpty
+                ? ProviderPreset.normalizedModelID(
+                    draft.fallbackModel, providerName: draft.fallbackProvider)
+                : nil)
 
         if let originalName, let index = config.commands.firstIndex(where: { $0.name == originalName }) {
             config.commands[index] = command
@@ -138,21 +157,24 @@ extension ConfigStore {
         }
         try config.validate()
 
-        try FileManager.default.createDirectory(at: promptsDirectory, withIntermediateDirectories: true)
-        try draft.promptText.write(
-            to: promptsDirectory.appendingPathComponent(promptFile),
-            atomically: true,
-            encoding: .utf8)
+        try FileManager.default.createDirectory(
+            at: promptsDirectory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        let promptURL = try resolvePromptURL(promptFile)
+        try draft.promptText.write(to: promptURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600], ofItemAtPath: promptURL.path)
         try write(config)
     }
 
-    /// Persists the Speak voice picked on the General screen (Edge provider).
+    /// Persists the Speak voice picked in Settings. Only the voice changes:
+    /// an existing base_url/provider setup must survive a voice pick.
     public func saveTTS(voice: String) throws {
         guard var config else {
             throw ConfigError.validation("Fix config.yaml before editing settings in the GUI")
         }
-        var tts = config.tts ?? TTSConfig()
-        tts.provider = "edge"
+        var tts = config.tts ?? TTSConfig(provider: "edge")
         tts.voice = voice
         config.tts = tts
         try write(config)
@@ -164,12 +186,6 @@ extension ConfigStore {
         try write(config)
         // The prompt file stays on disk on purpose; deleting text a user may
         // want back is worse than leaving a stray file.
-    }
-
-    private func write(_ config: Config) throws {
-        let yaml = try YAMLEncoder().encode(config)
-        try yaml.write(to: configFile, atomically: true, encoding: .utf8)
-        load()
     }
 
     private func slugify(_ name: String) -> String {

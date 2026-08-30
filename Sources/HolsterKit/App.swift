@@ -41,17 +41,45 @@ struct HolsterApp: App {
         MenuBarExtra {
             MenuContent(store: store)
         } label: {
-            if store.lastError == nil {
-                Image(nsImage: Self.menuBarIcon)
-            } else {
-                Image(systemName: "exclamationmark.triangle")
-            }
+            MenuBarLabel(store: store, icon: Self.menuBarIcon)
         }
 
         Window("Holster Settings", id: "settings") {
             SettingsView(store: store)
         }
         .defaultSize(width: 860, height: 580)
+    }
+}
+
+/// The status-item view is the only view guaranteed to render at launch, so
+/// it doubles as the first-run trigger: seeding the example config opens
+/// Settings once, where System Health walks through the setup.
+private struct MenuBarLabel: View {
+    @ObservedObject var store: ConfigStore
+    @Environment(\.openWindow) private var openWindow
+    let icon: NSImage
+
+    /// Key kept from the retired wizard so existing installs don't re-trigger.
+    private static let firstRunShownKey = "onboardingCompleted"
+
+    var body: some View {
+        Group {
+            if store.lastError == nil {
+                Image(nsImage: icon)
+            } else {
+                Image(systemName: "exclamationmark.triangle")
+            }
+        }
+        .task { openSettingsIfFirstRun() }
+        .onChange(of: store.didSeedExamples) { openSettingsIfFirstRun() }
+    }
+
+    private func openSettingsIfFirstRun() {
+        guard store.didSeedExamples,
+              !UserDefaults.standard.bool(forKey: Self.firstRunShownKey) else { return }
+        UserDefaults.standard.set(true, forKey: Self.firstRunShownKey)
+        openWindow(id: "settings")
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 

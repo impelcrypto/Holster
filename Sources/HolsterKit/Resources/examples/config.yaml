@@ -6,11 +6,14 @@
 providers:
   cliproxy:
     base_url: http://127.0.0.1:8317/v1
-    api_key: ""            # only if your proxy requires one
+    api_key: ""            # only for CLI/dev; the app uses macOS Keychain
   ollama:
     base_url: http://127.0.0.1:11434/v1
   # opencode-go:           # https://opencode.ai/docs/go/
   #   base_url: https://opencode.ai/zen/go/v1
+  #   api_key: ""
+  # gemini:                # Google Gemini API via its OpenAI-compatible endpoint
+  #   base_url: https://generativelanguage.googleapis.com/v1beta/openai
   #   api_key: ""
   # custom:                # any OpenAI-compatible endpoint, e.g. OpenRouter
   #   base_url: https://openrouter.ai/api/v1
@@ -34,7 +37,7 @@ tts:
 
 commands:
   - name: Grammar Teacher
-    hotkey: cmd+shift+g
+    hotkey: cmd+shift+g    # modifiers: cmd, shift, opt, ctrl
     prompt: grammar.md     # file under prompts/, {selection} gets replaced
     provider: cliproxy
     model: gpt-5.6-sol
