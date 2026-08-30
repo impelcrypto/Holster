@@ -4,3 +4,4 @@ build.noindex/
 .DS_Store
 *.xcodeproj
 *.profraw
+.omo/

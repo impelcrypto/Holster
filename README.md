@@ -7,7 +7,7 @@
 Run your own prompts on selected text, anywhere in macOS.
 
 [![License](https://img.shields.io/badge/license-MIT-0B347C)](LICENSE)
-![Platform](https://img.shields.io/badge/macOS-14%2B-0B347C)
+![Platform](https://img.shields.io/badge/macOS-14%2B%20Apple%20Silicon-0B347C)
 ![Swift](https://img.shields.io/badge/Swift-6-0B347C)
 
 </div>
@@ -51,9 +51,32 @@ sends whatever you ask it to speak to Microsoft's read-aloud service.
 
 ## Install
 
-There is no prebuilt release yet, so build it from source. Everything goes
-through SPM and there is no Xcode project to open, but you do need Xcode
-installed for Swift 6.
+Apple Silicon only, macOS 14 or later. There is no Intel build.
+
+```sh
+brew tap impelcrypto/tap
+brew install --cask holster
+```
+
+Or download `Holster-0.1.0.zip` from the
+[latest release](https://github.com/impelcrypto/Holster/releases/latest), unzip
+it, and drag `Holster.app` into `/Applications`.
+
+### The first launch needs one approval
+
+Holster is signed but not notarized by Apple, so macOS blocks it the first time
+with "Apple could not verify Holster is free of malware". To get past it, open
+System Settings → Privacy & Security, scroll down to the Security section, and
+click **Open Anyway** next to the Holster message. Every launch after that is
+normal.
+
+Notarization needs a paid Apple Developer account, so until then this step comes
+with every install route, Homebrew included.
+
+### Build from source
+
+Everything goes through SPM and there is no Xcode project to open, but you do
+need Xcode installed for Swift 6.
 
 ```sh
 git clone https://github.com/impelcrypto/Holster.git
@@ -246,6 +269,35 @@ never leak between configs.
 ## Contributing
 
 Issues and pull requests are welcome. Run `make test` before opening one.
+
+### Cutting a release
+
+1. Bump `VERSION`. One line, no `v` prefix. Semver: patch for fixes, minor for
+   new commands or settings, major once an existing `config.yaml` stops loading.
+2. Commit it and merge to `main`.
+3. Run `scripts/release.sh` from `main`.
+
+The script stops on Intel or on a dirty tree, builds the app, zips it with
+`ditto` so the code signature survives, and prints the sha256. When a
+`homebrew-tap` checkout sits next to this one, it rewrites the cask's `version`
+and `sha256` in place. After you confirm, it tags `vX.Y.Z`, pushes the tag, and
+creates the GitHub release with the zip attached.
+
+The cask lives in its own repository, so push that one yourself:
+
+```sh
+cd ../homebrew-tap
+git commit -am "holster X.Y.Z"
+git push
+```
+
+`VERSION` is the only place the number lives. `scripts/bundle.sh` reads it into
+the Info.plist, `scripts/release.sh` reads it for the tag and the zip name.
+
+Signing stays on the "Apple Development" certificate for now, which means every
+release needs the "Open Anyway" step described under Install. Moving to a paid
+Apple Developer account would let `notarytool` remove that step, at the cost of
+resetting everyone's Accessibility grant once when the certificate changes.
 
 ## License
 
