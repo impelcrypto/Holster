@@ -157,21 +157,24 @@ extension ConfigStore {
         }
         try config.validate()
 
-        try FileManager.default.createDirectory(at: promptsDirectory, withIntermediateDirectories: true)
-        try draft.promptText.write(
-            to: promptsDirectory.appendingPathComponent(promptFile),
-            atomically: true,
-            encoding: .utf8)
+        try FileManager.default.createDirectory(
+            at: promptsDirectory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        let promptURL = try resolvePromptURL(promptFile)
+        try draft.promptText.write(to: promptURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600], ofItemAtPath: promptURL.path)
         try write(config)
     }
 
-    /// Persists the Speak voice picked on the General screen (Edge provider).
+    /// Persists the Speak voice picked in Settings. Only the voice changes:
+    /// an existing base_url/provider setup must survive a voice pick.
     public func saveTTS(voice: String) throws {
         guard var config else {
             throw ConfigError.validation("Fix config.yaml before editing settings in the GUI")
         }
-        var tts = config.tts ?? TTSConfig()
-        tts.provider = "edge"
+        var tts = config.tts ?? TTSConfig(provider: "edge")
         tts.voice = voice
         config.tts = tts
         try write(config)

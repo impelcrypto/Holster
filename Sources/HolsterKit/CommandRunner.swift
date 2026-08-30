@@ -32,9 +32,16 @@ public final class CommandRunner {
             guard let self else { return }
             self.start(command, selection: viewModel?.selection)
         }
+        viewModel.onStop = { [weak self, weak viewModel] in
+            self?.currentTask?.cancel()
+            viewModel?.finish()
+        }
         panel.autoCopyOnSelect = command.wantsCopyOnSelect
         panel.onAutoCopy = { [weak viewModel] in
             viewModel?.flashToast("Copied selection")
+        }
+        panel.onClose = { [weak self] in
+            self?.currentTask?.cancel()
         }
 
         currentTask = Task { [weak self] in

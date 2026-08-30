@@ -1,5 +1,16 @@
 import Foundation
+import KeyboardShortcuts
 import Yams
+
+/// http:// to anything but loopback sends API keys and captured text in
+/// cleartext; the UI warns (but does not block, LAN setups are legitimate).
+public func isInsecureRemoteURL(_ base: String) -> Bool {
+    guard let url = URL(string: base.trimmingCharacters(in: .whitespaces)),
+          url.scheme?.lowercased() == "http" else { return false }
+    let host = url.host?.lowercased() ?? ""
+    return !(host == "localhost" || host.hasSuffix(".localhost")
+        || host.hasPrefix("127.") || host == "::1" || host == "[::1]")
+}
 
 public struct ProviderConfig: Codable, Equatable {
     public var baseURL: String
@@ -161,6 +172,7 @@ extension Config {
             throw ConfigError.validation("default_provider \"\(def)\" is not defined under providers:")
         }
         var seen = Set<String>()
+        var seenHotkeys = Set<KeyboardShortcuts.Shortcut>()
         for command in commands {
             guard seen.insert(command.name).inserted else {
                 throw ConfigError.validation("Duplicate command name \"\(command.name)\"")
@@ -178,7 +190,13 @@ extension Config {
                     "Command \"\(command.name)\": reasoning must be low, medium or high")
             }
             if let hotkey = command.hotkey, hotkey.isEmpty == false {
-                _ = try HotkeyParser.parse(hotkey)
+                // Compare parsed shortcuts so "cmd+shift+g" and "shift+cmd+g"
+                // count as the same hotkey.
+                let shortcut = try HotkeyParser.parse(hotkey)
+                guard seenHotkeys.insert(shortcut).inserted else {
+                    throw ConfigError.validation(
+                        "Command \"\(command.name)\": hotkey \"\(hotkey)\" is already used by another command")
+                }
             }
         }
     }

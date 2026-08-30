@@ -21,6 +21,8 @@ final class APIKeyStoreTests: XCTestCase {
     }
 
     func testKeychainStoreRoundTripsAndDeletesAPIKey() throws {
+        // Headless CI has no unlocked login keychain.
+        try XCTSkipIf(ProcessInfo.processInfo.environment["CI"] != nil)
         let store = KeychainAPIKeyStore(service: "app.holster.tests.\(UUID().uuidString)")
         let account = "provider:test"
 
@@ -70,14 +72,39 @@ final class APIKeyStoreTests: XCTestCase {
         let fixture = try makeFixture(apiKey: "", load: false)
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         fixture.apiKeys.values["provider:local"] = "sk-keychain"
+        let yamlBefore = try String(contentsOf: fixture.store.configFile, encoding: .utf8)
 
         fixture.store.load()
 
         XCTAssertEqual(fixture.store.config?.providers["local"]?.apiKey, "sk-keychain")
         XCTAssertEqual(fixture.apiKeys.values["provider:local"], "sk-keychain")
-        XCTAssertFalse(
-            try String(contentsOf: fixture.store.configFile, encoding: .utf8)
-                .contains("api_key"))
+        // An empty api_key holds no secret, so the file must not be rewritten.
+        XCTAssertEqual(
+            try String(contentsOf: fixture.store.configFile, encoding: .utf8), yamlBefore)
+    }
+
+    func testProductionLoadPreservesYAMLCommentsWhenNoSecretNeedsMigration() throws {
+        let fixture = try makeFixture(load: false)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        try """
+        # keep this comment
+        providers:
+          local:
+            base_url: http://127.0.0.1:9999/v1
+            api_key: ""  # empty on purpose
+        default_provider: local
+        commands:
+          - name: Existing
+            prompt: existing.md
+            model: model-a
+        """.write(
+            to: fixture.store.configFile, atomically: true, encoding: .utf8)
+
+        fixture.store.load()
+
+        XCTAssertNil(fixture.store.lastError)
+        let yaml = try String(contentsOf: fixture.store.configFile, encoding: .utf8)
+        XCTAssertTrue(yaml.contains("# keep this comment"))
     }
 
     func testPackagedSaveWithBlankPresetAPIKeyPreservesExistingKeyAndKeepsYAMLSecretFree() throws {
@@ -181,6 +208,73 @@ final class APIKeyStoreTests: XCTestCase {
         let command = try XCTUnwrap(fixture.store.command(named: "Existing"))
         XCTAssertEqual(fixture.store.config?.providers["local"]?.apiKey, "sk-hydrated")
         XCTAssertEqual(fixture.store.draft(for: command).apiKey, "")
+    }
+
+    func testKeychainServiceIsNamespacedByConfigDirectory() throws {
+        let defaultDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/holster", isDirectory: true)
+        XCTAssertEqual(ConfigStore.keychainService(for: defaultDir), "app.holster.api-keys")
+
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("holster-ns-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let service = ConfigStore.keychainService(for: temp)
+        XCTAssertTrue(service.hasPrefix("app.holster.api-keys."))
+        XCTAssertNotEqual(service, ConfigStore.keychainService(for: defaultDir))
+
+        // Symlinks and trailing slashes must not fork the namespace.
+        let link = FileManager.default.temporaryDirectory
+            .appendingPathComponent("holster-ns-link-\(UUID().uuidString)")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: temp)
+        defer { try? FileManager.default.removeItem(at: link) }
+        XCTAssertEqual(ConfigStore.keychainService(for: link), service)
+        XCTAssertEqual(
+            ConfigStore.keychainService(for: URL(fileURLWithPath: temp.path + "/")),
+            service)
+    }
+
+    func testRemoveAPIKeyKeepsKeyWhenDeleteFails() throws {
+        struct StubError: Error {}
+        final class FailingDeleteStore: APIKeyStoring {
+            var values: [String: String] = [:]
+            func apiKey(for account: String) throws -> String? { values[account] }
+            func setAPIKey(_ apiKey: String?, for account: String) throws {
+                if apiKey == nil, values[account] != nil { throw StubError() }
+                values[account] = apiKey
+            }
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("holster-keychain-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent("prompts"),
+            withIntermediateDirectories: true)
+        try """
+        providers:
+          local:
+            base_url: http://127.0.0.1:9999/v1
+        default_provider: local
+        commands:
+          - name: Existing
+            prompt: existing.md
+            model: model-a
+        """.write(
+            to: directory.appendingPathComponent("config.yaml"),
+            atomically: true, encoding: .utf8)
+        let apiKeys = FailingDeleteStore()
+        apiKeys.values["provider:local"] = "sk-survives"
+        let store = ConfigStore(
+            directory: directory, apiKeyPersistence: .keychain, apiKeyStore: apiKeys)
+        store.load()
+
+        XCTAssertThrowsError(try store.removeAPIKey(for: "local"))
+
+        // The failed delete must not lose the key: it is still in the store
+        // and gets re-hydrated on the reload.
+        XCTAssertEqual(apiKeys.values["provider:local"], "sk-survives")
+        XCTAssertEqual(store.config?.providers["local"]?.apiKey, "sk-survives")
     }
 
     private func makeFixture(apiKey: String? = nil, load: Bool = true) throws -> (

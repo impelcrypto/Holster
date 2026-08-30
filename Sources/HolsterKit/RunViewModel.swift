@@ -21,12 +21,13 @@ public final class RunViewModel: ObservableObject {
     /// Switches to the fallback model name when the primary provider fails.
     @Published public private(set) var modelName: String
 
-    /// The captured selection; smart copy falls back to it and retry reuses it.
+    /// The captured selection; retry reuses it.
     public var selection: String?
 
     public var onRetry: (() -> Void)?
     public var onSpeak: ((String) -> Void)?
     public var onCopied: (() -> Void)?
+    public var onStop: (() -> Void)?
 
     private var accumulated = ""
     private var flushScheduled = false
@@ -93,10 +94,10 @@ public final class RunViewModel: ObservableObject {
         state = .failed(message)
     }
 
+    /// Falls back to the full response, not the captured selection: ⌘↩ must
+    /// never silently echo the user's own input back at them.
     public var smartCopyText: String {
-        SmartCopy.extract(from: accumulated.isEmpty ? markdown : accumulated)
-            ?? selection
-            ?? markdown
+        SmartCopy.extract(from: fullText) ?? fullText
     }
 
     public var fullText: String {

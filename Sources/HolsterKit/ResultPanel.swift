@@ -17,6 +17,9 @@ final class ResultPanel: NSPanel {
     /// copies the selected text (normalized to plain text).
     var autoCopyOnSelect = false
     var onAutoCopy: (() -> Void)?
+    /// Fires on every close (Esc, ⌘↩ copy, red button) so the owner can stop
+    /// the in-flight stream instead of letting it burn tokens unseen.
+    var onClose: (() -> Void)?
     private var mouseMonitor: Any?
     private var draggingSelection = false
 
@@ -103,6 +106,11 @@ final class ResultPanel: NSPanel {
     /// Esc
     override func cancelOperation(_ sender: Any?) {
         close()
+    }
+
+    override func close() {
+        onClose?()
+        super.close()
     }
 
     func present<Content: View>(_ view: Content) {

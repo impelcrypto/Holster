@@ -10,6 +10,7 @@ struct SpeakSettingsView: View {
     @State private var locale = "en-US"
     @State private var voiceID = EdgeTTS.defaultVoice
     @State private var previewText = "Hi, this is a preview of the selected voice."
+    @State private var saveError: String?
     @State private var speaker = Speaker()
 
     private var locales: [String] {
@@ -66,6 +67,15 @@ struct SpeakSettingsView: View {
                         }
                         .labelsHidden()
                         .fixedSize()
+                    }
+                    if let saveError {
+                        row {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text("Couldn't save the voice: \(saveError)")
+                                .foregroundStyle(.orange)
+                                .lineLimit(2)
+                        }
                     }
                     RowDivider()
                     SettingRow(label: "Preview") {
@@ -133,9 +143,13 @@ struct SpeakSettingsView: View {
 
     private func selectVoice(_ shortName: String) {
         voiceID = shortName
-        // The picker only shows once config loaded, so a throw means a missing
-        // config — and then there is nothing to persist to anyway.
-        try? store.saveTTS(voice: shortName)
+        do {
+            try store.saveTTS(voice: shortName)
+            saveError = nil
+        } catch {
+            // A silent failure looks like a saved voice; say why it isn't.
+            saveError = error.localizedDescription
+        }
     }
 
     private func localeName(_ locale: String) -> String {

@@ -1,6 +1,17 @@
 import XCTest
 @testable import HolsterKit
 
+extension SmartCopyTests {
+    func testHeadingAndTableOnlyResponseReturnsNil() {
+        XCTAssertNil(SmartCopy.extract(from: """
+        # Corrections
+        | before | after |
+        |---|---|
+        | a | b |
+        """))
+    }
+}
+
 final class SmartCopyTests: XCTestCase {
     func testExtractsCorrectedSentenceAndStripsItalics() {
         let markdown = """

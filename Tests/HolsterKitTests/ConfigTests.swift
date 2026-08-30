@@ -37,6 +37,37 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(resolved.provider.baseURL, "http://127.0.0.1:8317/v1")
     }
 
+    func testRejectsDuplicateHotkeys() {
+        let yaml = """
+        providers:
+          p:
+            base_url: http://localhost:1/v1
+        commands:
+          - name: A
+            hotkey: cmd+shift+g
+            prompt: a.md
+            model: m
+          - name: B
+            hotkey: shift+cmd+g
+            prompt: b.md
+            model: m
+        """
+        XCTAssertThrowsError(try Config.parse(yaml: yaml)) { error in
+            guard case ConfigError.validation(let message) = error else {
+                return XCTFail("Expected validation error, got \(error)")
+            }
+            XCTAssertTrue(message.contains("hotkey"))
+        }
+    }
+
+    func testInsecureRemoteURLDetection() {
+        XCTAssertFalse(isInsecureRemoteURL("http://127.0.0.1:8317/v1"))
+        XCTAssertFalse(isInsecureRemoteURL("http://localhost:11434/v1"))
+        XCTAssertFalse(isInsecureRemoteURL("https://openrouter.ai/api/v1"))
+        XCTAssertTrue(isInsecureRemoteURL("http://192.168.1.20:11434/v1"))
+        XCTAssertTrue(isInsecureRemoteURL("http://example.com/v1"))
+    }
+
     func testLegacyKeysAreIgnored() throws {
         let config = try Config.parse(yaml: """
         providers:

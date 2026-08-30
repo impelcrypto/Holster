@@ -34,13 +34,13 @@ rebuild, so a stable certificate is worth it.
 
 ## First run
 
-1. Launch the app; a text icon appears in the menu bar.
+1. Launch the app; a text icon appears in the menu bar and the Settings
+   window opens on General, where System Health shows the Accessibility
+   permission (needed to read the selection via a synthetic ⌘C) and the
+   config status.
 2. `~/.config/holster/` is created with an example config and a grammar
    check prompt.
-3. Select some text anywhere and press ⌘⇧G. The first run asks for
-   Accessibility permission (needed to read the selection via a synthetic
-   ⌘C); grant it in System Settings → Privacy & Security → Accessibility,
-   then try the hotkey again.
+3. Select some text anywhere and press ⌘⇧G.
 
 ## Configuration
 
@@ -105,7 +105,8 @@ and `{clipboard}` (current clipboard contents).
 | --- | --- |
 | ⌘↩ | Copy the corrected sentence (smart copy) and close |
 | ⇧⌘↩ | Copy the full response |
-| ⌘S | Speak the corrected sentence |
+| ⌘S | Speak the selection, or the whole response when nothing is selected |
+| ⌘. | Stop generating (Esc also cancels the stream on close) |
 | ⌘R | Retry (after an error) |
 | Esc | Close |
 
@@ -121,7 +122,8 @@ echo "It seem wrong." | Holster --run "Grammar Teacher"
 ```
 
 `--config <dir>` points at an alternative config directory, `--no-stream`
-disables SSE.
+disables SSE. Each config directory gets its own Keychain namespace, so API
+keys never leak between configs.
 
 ## Notes
 

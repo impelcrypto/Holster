@@ -1,4 +1,5 @@
 import Combine
+import CryptoKit
 import Foundation
 import Security
 import Yams
@@ -90,6 +91,9 @@ private struct APIKeyStoreError: LocalizedError {
 public final class ConfigStore: ObservableObject {
     @Published public private(set) var config: Config?
     @Published public private(set) var lastError: String?
+    /// True when this launch created ~/.config/holster from the bundled
+    /// examples — the signal to open the first-run setup guide.
+    @Published public private(set) var didSeedExamples = false
 
     public let directory: URL
     public var configFile: URL { directory.appendingPathComponent("config.yaml") }
@@ -107,20 +111,52 @@ public final class ConfigStore: ObservableObject {
     public init(
         directory: URL? = nil,
         apiKeyPersistence: APIKeyPersistence = .applicationDefault,
-        apiKeyStore: APIKeyStoring = KeychainAPIKeyStore()
+        apiKeyStore: APIKeyStoring? = nil
     ) {
-        self.directory = directory
-            ?? FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".config/holster", isDirectory: true)
+        let resolved = directory ?? Self.defaultDirectory
+        self.directory = resolved
         self.apiKeyPersistence = apiKeyPersistence
         self.apiKeyStore = apiKeyStore
+            ?? KeychainAPIKeyStore(service: Self.keychainService(for: resolved))
+    }
+
+    private static var defaultDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/holster", isDirectory: true)
+    }
+
+    /// The default config dir keeps the legacy service so existing items keep
+    /// working; alternate --config dirs get their own namespace so credentials
+    /// never leak across configs.
+    static func keychainService(for directory: URL) -> String {
+        let canonical = directory.standardizedFileURL.resolvingSymlinksInPath().path
+        let base = "app.holster.api-keys"
+        guard canonical != defaultDirectory.standardizedFileURL.resolvingSymlinksInPath().path else {
+            return base
+        }
+        let digest = SHA256.hash(data: Data(canonical.utf8))
+        let suffix = digest.prefix(4).map { String(format: "%02x", $0) }.joined()
+        return "\(base).\(suffix)"
     }
 
     /// Full app startup: seed examples on first run, load, then watch files.
     public func bootstrapAndLoad() {
         installExamplesIfNeeded()
+        normalizePermissions()
         load()
         startWatching()
+    }
+
+    /// config.yaml can hold plaintext keys (CLI mode), so keep it 0600 and the
+    /// directories 0700 even when they predate this build.
+    private func normalizePermissions() {
+        let fm = FileManager.default
+        for dir in [directory, promptsDirectory] where fm.fileExists(atPath: dir.path) {
+            try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+        }
+        if fm.fileExists(atPath: configFile.path) {
+            try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: configFile.path)
+        }
     }
 
     /// CLI startup: no watching.
@@ -139,6 +175,10 @@ public final class ConfigStore: ObservableObject {
             onReload?(loaded)
         } catch let error as ConfigError {
             lastError = error.localizedDescription
+        } catch let error as APIKeyStoreError {
+            // A locked or denied Keychain is not a config-file problem;
+            // misattributing it sends the user to the wrong fix.
+            lastError = error.localizedDescription
         } catch {
             lastError = "Cannot read \(configFile.path): \(error.localizedDescription)"
         }
@@ -149,12 +189,26 @@ public final class ConfigStore: ObservableObject {
     }
 
     public func promptText(for command: CommandConfig) throws -> String {
-        let url = promptsDirectory.appendingPathComponent(command.prompt)
+        let url = try resolvePromptURL(command.prompt)
         do {
             return try String(contentsOf: url, encoding: .utf8)
         } catch {
             throw ConfigError.unreadable("prompt file \(url.path)")
         }
+    }
+
+    /// Rejects prompt names that resolve outside prompts/ (../, symlinks): a
+    /// tampered config must not read or overwrite arbitrary files.
+    func resolvePromptURL(_ name: String) throws -> URL {
+        let root = promptsDirectory.standardizedFileURL.resolvingSymlinksInPath()
+        let candidate = promptsDirectory.appendingPathComponent(name)
+            .standardizedFileURL.resolvingSymlinksInPath()
+        guard candidate.pathComponents.count > root.pathComponents.count,
+              candidate.pathComponents.starts(with: root.pathComponents) else {
+            throw ConfigError.validation(
+                "Prompt file \"\(name)\" must live inside \(root.path)")
+        }
+        return candidate
     }
 
     func write(_ config: Config) throws {
@@ -167,13 +221,15 @@ public final class ConfigStore: ObservableObject {
         guard var updated = config, updated.providers[providerName] != nil else {
             throw ConfigError.validation("Unknown provider \"\(providerName)\"")
         }
-        if apiKeyPersistence == .keychain {
-            try apiKeyStore.setAPIKey(nil, for: "provider:\(providerName)")
-        }
+        // Config write comes first: if it fails, the key is still in Keychain
+        // instead of being irreversibly gone.
         updated.providers[providerName]?.apiKey = nil
         let persisted = try persistAPIKeys(from: updated)
         try writeConfigFile(persisted)
-        load()
+        defer { load() }
+        if apiKeyPersistence == .keychain {
+            try apiKeyStore.setAPIKey(nil, for: "provider:\(providerName)")
+        }
     }
 
     private func loadAPIKeys(into config: Config) throws -> Config {
@@ -182,26 +238,21 @@ public final class ConfigStore: ObservableObject {
         var persisted = config
         var needsMigration = false
 
+        // Only a real plaintext secret triggers the migration rewrite: an
+        // empty api_key has nothing to protect, and the rewrite would destroy
+        // the YAML comments of a freshly installed example config.
         for (name, provider) in config.providers {
             let account = "provider:\(name)"
-            if let apiKey = provider.apiKey {
-                if apiKey.isEmpty {
-                    hydrated.providers[name]?.apiKey = try apiKeyStore.apiKey(for: account)
-                } else {
-                    try apiKeyStore.setAPIKey(apiKey, for: account)
-                }
+            if let apiKey = provider.apiKey, !apiKey.isEmpty {
+                try apiKeyStore.setAPIKey(apiKey, for: account)
                 persisted.providers[name]?.apiKey = nil
                 needsMigration = true
             } else {
                 hydrated.providers[name]?.apiKey = try apiKeyStore.apiKey(for: account)
             }
         }
-        if let apiKey = config.tts?.apiKey {
-            if apiKey.isEmpty {
-                hydrated.tts?.apiKey = try apiKeyStore.apiKey(for: "tts")
-            } else {
-                try apiKeyStore.setAPIKey(apiKey, for: "tts")
-            }
+        if let apiKey = config.tts?.apiKey, !apiKey.isEmpty {
+            try apiKeyStore.setAPIKey(apiKey, for: "tts")
             persisted.tts?.apiKey = nil
             needsMigration = true
         } else {
@@ -232,6 +283,9 @@ public final class ConfigStore: ObservableObject {
     private func writeConfigFile(_ config: Config) throws {
         let yaml = try YAMLEncoder().encode(config)
         try yaml.write(to: configFile, atomically: true, encoding: .utf8)
+        // Atomic write = temp file + rename, so the mode is set afterwards.
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600], ofItemAtPath: configFile.path)
     }
 
     // MARK: - First run
@@ -241,7 +295,10 @@ public final class ConfigStore: ObservableObject {
         guard !fm.fileExists(atPath: configFile.path) else { return }
         guard let examples = Bundle.module.url(forResource: "examples", withExtension: nil) else { return }
         do {
-            try fm.createDirectory(at: promptsDirectory, withIntermediateDirectories: true)
+            try fm.createDirectory(
+                at: promptsDirectory,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
             try fm.copyItem(
                 at: examples.appendingPathComponent("config.yaml"),
                 to: configFile)
@@ -252,6 +309,7 @@ public final class ConfigStore: ObservableObject {
                     try fm.copyItem(at: file, to: target)
                 }
             }
+            didSeedExamples = true
         } catch {
             lastError = "First-run setup failed: \(error.localizedDescription)"
         }
