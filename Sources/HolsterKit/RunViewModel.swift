@@ -93,6 +93,9 @@ public final class RunViewModel: ObservableObject {
         autoCopyTask = Task { [weak self] in
             while NSEvent.pressedMouseButtons & 1 == 1 {
                 try? await Task.sleep(for: .milliseconds(40))
+                // A cancelled sleep returns at once, so without this the loop
+                // spins on the MainActor until the mouse button comes up.
+                if Task.isCancelled { return }
             }
             try? await Task.sleep(for: .milliseconds(250))
             guard !Task.isCancelled, let self else { return }
