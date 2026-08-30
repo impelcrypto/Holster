@@ -1,53 +1,84 @@
+<div align="center">
+
+<img src="assets/icon.png" width="128" alt="Holster app icon">
+
 # Holster
 
-A macOS menu bar app that runs your prompt templates on selected text via any
-OpenAI-compatible endpoint (CLIProxyAPI, Ollama, OpenAI, ...). Built as a
+Run your own prompts on selected text, anywhere in macOS.
+
+[![License](https://img.shields.io/badge/license-MIT-0B347C)](LICENSE)
+![Platform](https://img.shields.io/badge/macOS-14%2B-0B347C)
+![Swift](https://img.shields.io/badge/Swift-6-0B347C)
+
+</div>
+
+Select text in any app, press your hotkey, and the answer streams into a
+floating markdown window. Press ⌘↩ to copy it and close.
+
+Holster talks to any OpenAI-compatible endpoint, so the model behind a command
+can be a local Ollama, OpenAI, Google Gemini, OpenRouter, or a CLIProxyAPI
+sitting in front of a subscription you already pay for. Prompts and commands are
+plain files under `~/.config/holster/`, so you can keep them in git. Built as a
 stable replacement for Raycast AI custom commands.
 
-Select text in any app, press your hotkey, and the LLM result appears in a
-floating markdown popup. Press ⌘↩ to copy the corrected sentence and close.
+<!-- TODO: demo GIF of the popup goes here -->
 
-- One global hotkey per command
-- Prompts and commands are plain files under `~/.config/holster/`
-  (git-friendly, hot-reloaded), also editable in the built-in settings UI
-- Streaming markdown rendering with GFM tables
-- Smart copy: extracts the corrected sentence, not the whole response
-- Optional text-to-speech (OpenAI-compatible `/audio/speech`, falls back to
-  the built-in macOS voice)
-- Headless CLI mode for scripting and testing
-- Native Swift, no Electron; a single small binary
+## Features
 
-## Build and install
+- One global hotkey per command, recorded in Settings with a duplicate check
+- Prompts and commands are plain files: git-friendly, hot-reloaded, and also
+  editable from the built-in Settings UI
+- Streaming markdown rendering, GFM tables included
+- Smart copy pulls out the corrected sentence instead of the whole response
+- API keys go to the macOS Keychain, never to `config.yaml`
+- A fallback provider takes over when the primary one dies before any output
+- Optional text-to-speech: free Edge voices, an OpenAI-compatible
+  `/audio/speech`, or the built-in macOS voice
+- Your clipboard survives the capture, and the restore is marked transient so
+  clipboard managers don't log a duplicate
+- Headless CLI mode for scripting and for testing prompts
+- Native Swift and SwiftUI. No Electron, one small binary
 
-Requires Xcode (Swift 6+). No Xcode project — everything builds with SPM.
+## Privacy
+
+Holster has no telemetry and no backend. Your selected text goes to the endpoint
+you configure and nowhere else. The one exception is `tts.provider: edge`, which
+sends whatever you ask it to speak to Microsoft's read-aloud service.
+
+## Install
+
+There is no prebuilt release yet, so build it from source. Everything goes
+through SPM and there is no Xcode project to open, but you do need Xcode
+installed for Swift 6.
 
 ```sh
+git clone https://github.com/impelcrypto/Holster.git
+cd Holster
 make app       # build Holster.app into ./build.noindex
 make install   # copy to /Applications and launch
 make test      # unit tests
 ```
 
-Signing: `scripts/bundle.sh` picks up your "Apple Development" certificate
-automatically if you have one, and falls back to ad-hoc signing otherwise.
-With ad-hoc signing macOS forgets the Accessibility grant after every
-rebuild, so a stable certificate is worth it.
+`scripts/bundle.sh` signs with your "Apple Development" certificate when you
+have one and falls back to ad-hoc signing otherwise. Under ad-hoc signing macOS
+forgets the Accessibility grant after every rebuild, so a stable certificate
+saves you a trip to System Settings each time.
 
 ## First run
 
-1. Launch the app; a text icon appears in the menu bar and the Settings
-   window opens on General, where System Health shows the Accessibility
-   permission (needed to read the selection via a synthetic ⌘C) and the
-   config status.
-2. `~/.config/holster/` is created with an example config and a grammar
-   check prompt.
+1. Launch the app. A text icon appears in the menu bar and the Settings window
+   opens on General, where System Health shows the Accessibility permission
+   (needed to read the selection via a synthetic ⌘C) and the config status.
+2. `~/.config/holster/` is created with an example config and a grammar check
+   prompt.
 3. Select some text anywhere and press ⌘⇧G.
 
 ## Configuration
 
-Everything lives in `~/.config/holster/`. Edit the files directly or use
-the Settings window (menu bar icon → Settings…) — both stay in sync because
-the files are the single source of truth and the app watches them.
-Note: a GUI save re-serializes `config.yaml`, so YAML comments are lost.
+Everything lives in `~/.config/holster/`. Edit the files directly or use the
+Settings window (menu bar icon → Settings…). Both stay in sync because the files
+are the single source of truth and the app watches them. One caveat: saving from
+the GUI re-serializes `config.yaml`, which drops your YAML comments.
 
 ```yaml
 # config.yaml
@@ -82,24 +113,40 @@ commands:
     reasoning: medium      # low / medium / high; omit to send no reasoning field
                            # (on opencode-go an omitted value falls back to low:
                            #  its models think by default, so "none" never helps)
+    copy_on_select: true   # selecting text in the result window copies it
     fallback_provider: ollama   # used when the provider fails before any output
     fallback_model: qwen3:8b    # omit to reuse the primary model
 ```
 
-The packaged app stores API keys entered in Settings in macOS Keychain, not in
-`config.yaml`. When it first opens an existing config, it also migrates any
-plaintext provider or TTS API keys to Keychain and removes them from the file.
-Development executables launched with `swift run` keep using `api_key` from
-YAML; the packaged app uses Keychain in both menu-bar and headless CLI modes.
+Prompt files take two placeholders: `{selection}` for the captured selection and
+`{clipboard}` for the current clipboard contents.
 
-The Settings window always offers `opencode-go` (OpenCode Go, fixed base URL),
-`gemini` (Google Gemini, fixed OpenAI-compatible base URL), and `custom`
-(free-form base URL) as providers and writes them to `providers:` on save.
+### API keys
 
-Prompt files support two placeholders: `{selection}` (the captured selection)
-and `{clipboard}` (current clipboard contents).
+The packaged app stores keys you enter in Settings in the macOS Keychain rather
+than in `config.yaml`. The first time it opens an existing config it also
+migrates any plaintext provider or TTS keys into the Keychain and strips them
+from the file. Development builds launched with `swift run` keep reading
+`api_key` from YAML; the packaged app uses the Keychain in both menu-bar and
+headless CLI modes.
 
-## Popup keys
+### Providers and commands in Settings
+
+Settings always offers `opencode-go` (fixed base URL), `gemini` (fixed
+OpenAI-compatible base URL), and `custom` (free-form base URL), and writes them
+to `providers:` on save.
+
+Each command gets its own editor: hotkey recording that warns when another
+command already claims the combination, a model list pulled from the provider's
+`/v1/models` (type the ID when the endpoint has none), an API key check, and a
+Test section that runs the draft on a sample sentence before you save.
+
+### Theme
+
+Settings → General → Theme picks System (default), Light, or Dark. It lives in
+UserDefaults rather than `config.yaml`.
+
+## Popup shortcuts
 
 | Key | Action |
 | --- | --- |
@@ -110,40 +157,40 @@ and `{clipboard}` (current clipboard contents).
 | ⌘R | Retry (after an error) |
 | Esc | Close |
 
-## CLI mode
+## CLI
 
-Runs the same pipeline without GUI or permissions — useful for testing
+The same pipeline without the GUI or any permissions, handy for iterating on
 prompts and providers:
 
 ```sh
 Holster --list
 Holster --run "Grammar Teacher" --text "It seem wrong."
 echo "It seem wrong." | Holster --run "Grammar Teacher"
+Holster --help
 ```
 
-`--config <dir>` points at an alternative config directory, `--no-stream`
-disables SSE. Each config directory gets its own Keychain namespace, so API
-keys never leak between configs.
+`--config <dir>` points at an alternative config directory and `--no-stream`
+disables SSE. Each config directory gets its own Keychain namespace, so API keys
+never leak between configs.
 
-## Notes
+## Known limits
 
-- `provider: edge` uses Microsoft Edge's free read-aloud voices over a
-  WebSocket — no API key, but it's an unofficial endpoint that may change; on
-  any failure Holster falls back to the built-in macOS voice.
-- TTS through CLIProxyAPI does not work (`/v1/audio/speech` is not proxied
-  for subscription auth); point `tts.base_url` directly at a provider with a
-  real API key, or use `provider: edge` / the macOS voice instead.
-- The built-in macOS voice (no provider, no base_url) honors `tts.voice` (a
-  name like `Ava` or a full identifier). Premium voices are a manual download:
-  System Settings → Accessibility → Spoken Content → System voice → Manage
-  Voices… → English (US). If the voice isn't installed, it falls back to the
-  default en-US voice.
-- The app restores your clipboard after capturing the selection and marks the
-  restore transient so clipboard managers don't record a duplicate.
-- Settings → General → Theme picks System (default), Light or Dark. It is stored
-  in UserDefaults, not `config.yaml`. A result window that is already open keeps
-  the old theme until the next run.
+- Text-to-speech through CLIProxyAPI does not work, because `/v1/audio/speech`
+  is not proxied for subscription auth. Point `tts.base_url` straight at a
+  provider with a real API key, or use `provider: edge` or the macOS voice.
+- `provider: edge` rides Microsoft Edge's free read-aloud voices over a
+  WebSocket. No API key, but it is an unofficial endpoint that may change. On
+  any failure Holster drops back to the built-in macOS voice.
+- The built-in macOS voice (no provider, no base_url) honors `tts.voice`, either
+  a name like `Ava` or a full identifier. Premium voices need a manual download
+  from System Settings → Accessibility → Spoken Content → System voice → Manage
+  Voices… → English (US). An uninstalled voice falls back to the default en-US one.
+- A result window that is already open keeps the old theme until the next run.
+
+## Contributing
+
+Issues and pull requests are welcome. Run `make test` before opening one.
 
 ## License
 
-MIT
+[MIT](LICENSE)
