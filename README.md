@@ -17,7 +17,7 @@ floating markdown window. Press ⌘↩ to copy it and close.
 
 Holster talks to any OpenAI-compatible endpoint, so the model behind a command
 can be a local Ollama, OpenAI, Google Gemini, OpenRouter, or a CLIProxyAPI
-sitting in front of a subscription you already pay for. Prompts and commands are
+sitting in front of a ChatGPT or Claude subscription you already pay for. Prompts and commands are
 plain files under `~/.config/holster/`, so you can keep them in git. Built as a
 stable replacement for Raycast AI custom commands.
 
@@ -75,7 +75,63 @@ saves you a trip to System Settings each time.
    (needed to read the selection via a synthetic ⌘C) and the config status.
 2. `~/.config/holster/` is created with an example config and a grammar check
    prompt.
-3. Select some text anywhere and press ⌘⇧G.
+3. Set up a provider (next section), then select some text anywhere and press ⌘⇧G.
+
+## AI providers
+
+Holster needs one OpenAI-compatible endpoint behind your commands. Pick the one
+that matches what you already have.
+
+### Ollama: free, and the quickest to get running
+
+Cloud models run on Ollama's machines, so a 31B model answers at full speed on a
+Mac that could never hold it in memory.
+
+```sh
+brew install ollama          # or grab the app from https://ollama.com/download
+brew services start ollama   # skip this if you installed the app instead
+ollama signin                # free ollama.com account; cloud models need it
+ollama pull gemma4:31b-cloud
+```
+
+The example config already points an `ollama` provider at
+`http://127.0.0.1:11434/v1`, and it needs no API key. Open Settings, pick your
+command, set Provider to `ollama` and Model to `gemma4:31b-cloud`. The example
+command ships on `cliproxy`, so it keeps failing until you switch it.
+
+The free tier covers light use, with limits that reset per session and per week
+([pricing](https://ollama.com/pricing)). To skip the account and the limits, pull
+a local model instead: `ollama pull gemma4:12b` weighs about 7 GB and runs
+entirely on your Mac.
+
+### CLIProxyAPI: your ChatGPT or Claude subscription, no API key
+
+[CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) signs in to a
+subscription you already pay for and serves it on an OpenAI-compatible port.
+Nothing is billed per token.
+
+```sh
+brew install cliproxyapi
+cliproxyapi --codex-login    # ChatGPT Plus/Pro, opens a browser
+cliproxyapi --claude-login   # Claude Pro/Max
+brew services start cliproxyapi
+```
+
+The proxy listens on 8317, which is where the example config's `cliproxy`
+provider already points, and it takes an empty API key.
+
+This setup has more moving parts than the other two, so the easiest route is to
+delegate it: hand this README and <https://help.router-for.me/> to Claude Code or
+another coding agent and ask it to finish the setup. It can install the binary,
+walk you through the OAuth login, and write the provider into `config.yaml`.
+
+### OpenCode Go and Gemini API keys
+
+Settings ships presets for `opencode-go` and `gemini`, both on fixed base URLs.
+Paste a key into the command editor and it lands in the Keychain rather than in
+`config.yaml`. Anything else OpenAI-compatible, OpenRouter for instance, goes
+under the `custom` preset with its own base URL. Saving writes the provider into
+`providers:` for you.
 
 ## Configuration
 
@@ -134,11 +190,7 @@ from the file. Development builds launched with `swift run` keep reading
 `api_key` from YAML; the packaged app uses the Keychain in both menu-bar and
 headless CLI modes.
 
-### Providers and commands in Settings
-
-Settings always offers `opencode-go` (fixed base URL), `gemini` (fixed
-OpenAI-compatible base URL), and `custom` (free-form base URL), and writes them
-to `providers:` on save.
+### Commands in Settings
 
 Each command gets its own editor: hotkey recording that warns when another
 command already claims the combination, a model list pulled from the provider's

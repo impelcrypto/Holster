@@ -21,47 +21,50 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selection) {
-                Label("General", systemImage: "gearshape")
-                    .tag(SidebarItem.general)
-                Label("Speak", systemImage: "speaker.wave.2.fill")
-                    .tag(SidebarItem.speak)
-                Section("Prompts") {
-                    ForEach(store.config?.commands ?? [], id: \.name) { command in
-                        commandRow(command).tag(SidebarItem.command(command.name))
+        // The status bar sits OUTSIDE the split view: safeAreaInset does not
+        // reach the AppKit-backed columns, so the detail ScrollView would
+        // render its last rows behind the bar.
+        VStack(spacing: 0) {
+            NavigationSplitView {
+                List(selection: $selection) {
+                    Label("General", systemImage: "gearshape")
+                        .tag(SidebarItem.general)
+                    Label("Speak", systemImage: "speaker.wave.2.fill")
+                        .tag(SidebarItem.speak)
+                    Section("Prompts") {
+                        ForEach(store.config?.commands ?? [], id: \.name) { command in
+                            commandRow(command).tag(SidebarItem.command(command.name))
+                        }
                     }
                 }
+                .listStyle(.sidebar)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 250)
+                .toolbar {
+                    Button {
+                        selection = .newCommand
+                    } label: {
+                        Label("New Command", systemImage: "plus")
+                    }
+                }
+            } detail: {
+                detail
             }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 220, ideal: 250)
-            .toolbar {
-                Button {
-                    selection = .newCommand
-                } label: {
-                    Label("New Command", systemImage: "plus")
+            .overlay(alignment: .bottom) {
+                if showSavedToast {
+                    Label("Saved", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: Capsule())
+                        .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
+                        .padding(.bottom, 16)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
-        } detail: {
-            detail
+            statusBar
         }
         .frame(minWidth: 760, minHeight: 520)
-        // Overlay must come before the safeAreaInset so the toast sits above
-        // the status bar instead of behind it.
-        .overlay(alignment: .bottom) {
-            if showSavedToast {
-                Label("Saved", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.regularMaterial, in: Capsule())
-                    .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
-                    .padding(.bottom, 16)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-        }
-        .safeAreaInset(edge: .bottom) { statusBar }
         // The scratch recorder shortcut must not stay registered globally once
         // the settings window closes. KeyboardShortcuts unregisters by VALUE,
         // not by name, so this also kills any command sharing the same combo;
