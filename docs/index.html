@@ -16,6 +16,7 @@
 <meta property="og:image" content="https://impelcrypto.github.io/Holster/assets/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Holster running a Grammar Teacher command on selected text in a floating markdown window">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Holster — Run your own prompts on selected text, anywhere on macOS">
 <meta name="twitter:description" content="Select text in any app, press a hotkey, and the answer streams into a floating markdown window. No telemetry, no backend, MIT-licensed.">
@@ -39,6 +40,8 @@
     --card: rgba(255, 255, 255, .70);
     --line: rgba(0, 0, 0, .10);
     --inset: rgba(0, 0, 0, .05);
+    /* opaque twin of --bg under --inset: a fade must end solid to hide text */
+    --pane-bg: #E2E1E4;
     --amber: #FFB354;
     --copper: #C66E3D;
     --accent-ink: #A8542A;
@@ -58,6 +61,7 @@
       --card: rgba(255, 255, 255, .05);
       --line: rgba(255, 255, 255, .08);
       --inset: rgba(0, 0, 0, .25);
+      --pane-bg: #131214;
       --accent-ink: #FFB354;
       --grad-ink: linear-gradient(135deg, #FFC97E, #C66E3D);
       --nav-bg: rgba(25, 24, 27, .72);
@@ -74,6 +78,7 @@
     --card: rgba(255, 255, 255, .05);
     --line: rgba(255, 255, 255, .08);
     --inset: rgba(0, 0, 0, .25);
+    --pane-bg: #131214;
     --accent-ink: #FFB354;
     --grad-ink: linear-gradient(135deg, #FFC97E, #C66E3D);
     --nav-bg: rgba(25, 24, 27, .72);
@@ -277,14 +282,16 @@
   /* prompt tab viewer */
   .prompt-pair { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: stretch; }
   .prompt-pair > * { min-width: 0; }
-  .prompt-viewer { position: relative; border: 1px solid var(--line); border-radius: 14px; background: var(--inset); overflow: hidden; }
+  .prompt-viewer { position: relative; border: 1px solid var(--line); border-radius: 14px; background: var(--pane-bg); overflow: hidden; }
   .prompt-viewer::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 56px;
     border-radius: 0 0 13px 13px; pointer-events: none; opacity: 0; transition: opacity .2s;
-    background: linear-gradient(transparent, var(--inset));
+    background: linear-gradient(transparent, var(--pane-bg));
   }
   .prompt-viewer.fade::after { opacity: 1; }
   .prompt-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  /* contents: the tabs stay direct flex children while ARIA gets its own tablist */
+  .prompt-tabs .tablist { display: contents; }
   .prompt-tab {
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; cursor: pointer;
     padding: 6px 11px; border-radius: 8px; border: 1px solid transparent; background: none;
@@ -297,6 +304,8 @@
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; line-height: 1.7;
     padding: 16px 18px; height: 460px; overflow: auto; white-space: pre-wrap;
   }
+  /* the pane fills its overflow-hidden parent, so an outside ring gets clipped */
+  .prompt-pane:focus-visible { outline-offset: -3px; }
   @media (min-width: 901px) {
     /* crop the settings shot to the viewer's height so the two columns stay level */
     .prompt-pair .shot { display: flex; flex-direction: column; }
@@ -454,6 +463,7 @@
     <div class="demo-frame reveal">
       <video width="1000" height="576" autoplay muted loop playsinline poster="assets/demo-still.jpg" aria-label="Selecting a sentence in TextEdit, pressing the hotkey, and the Grammar Teacher command streaming corrections into a floating window">
         <source src="assets/demo.mp4" type="video/mp4">
+        <img src="assets/demo-still.jpg" width="1000" height="576" alt="Selecting a sentence in TextEdit, pressing the hotkey, and the Grammar Teacher command streaming corrections into a floating window">
       </video>
     </div>
   </div>
@@ -489,13 +499,15 @@
       <p class="section-sub reveal">Drop <code>{selection}</code> into a prompt. That's the whole trick.</p>
       <div class="prompt-pair reveal">
         <div class="prompt-viewer">
-          <div class="prompt-tabs" role="tablist" aria-label="Example prompts">
-            <button class="prompt-tab" role="tab" aria-selected="true" aria-controls="pp-0" id="pt-0" type="button">Grammar Teacher</button>
-            <button class="prompt-tab" role="tab" aria-selected="false" aria-controls="pp-1" id="pt-1" type="button">Translator</button>
-            <button class="prompt-tab" role="tab" aria-selected="false" aria-controls="pp-2" id="pt-2" type="button">What does it stand for?</button>
+          <div class="prompt-tabs">
+            <div class="tablist" role="tablist" aria-label="Example prompts">
+              <button class="prompt-tab" role="tab" aria-selected="true" aria-controls="pp-0" id="pt-0" type="button">Grammar Teacher</button>
+              <button class="prompt-tab" role="tab" aria-selected="false" aria-controls="pp-1" id="pt-1" type="button">Translator</button>
+              <button class="prompt-tab" role="tab" aria-selected="false" aria-controls="pp-2" id="pt-2" type="button">What does it stand for?</button>
+            </div>
             <button class="copy prompt-copy" aria-live="polite" type="button">Copy</button>
           </div>
-          <pre class="prompt-pane" id="pp-0" role="tabpanel" aria-labelledby="pt-0">You are an English grammar checker for non-native engineers.
+          <pre class="prompt-pane" id="pp-0" role="tabpanel" aria-labelledby="pt-0" tabindex="0">You are an English grammar checker for non-native engineers.
 
 Correct grammar and spelling only.
 Do NOT rewrite sentences for style unless instructed in the Natural Rephrase section below.
@@ -611,18 +623,18 @@ It seems *a bug is going around* the office.
 
 | Original Part | Natural Version | Why |
 | --- | --- | --- |
-| a lot of people are getting sick | a cold is going around | This is a more natural and idiomatic way to describe many people becoming sick in the same place. |
+| a lot of people are getting sick | a bug is going around | This is a more natural and idiomatic way to describe many people becoming sick in the same place. |
 
 User sentence:
 {selection}</pre>
-          <pre class="prompt-pane" id="pp-1" role="tabpanel" aria-labelledby="pt-1" hidden>You are a translator.
+          <pre class="prompt-pane" id="pp-1" role="tabpanel" aria-labelledby="pt-1" tabindex="0" hidden>You are a translator.
 
 - If input is Japanese → translate to English
 - If input is any other language → translate to Japanese
 Output only the translation, nothing else.
 
 {selection}</pre>
-          <pre class="prompt-pane" id="pp-2" role="tabpanel" aria-labelledby="pt-2" hidden>You are an expert at expanding English abbreviations and acronyms.
+          <pre class="prompt-pane" id="pp-2" role="tabpanel" aria-labelledby="pt-2" tabindex="0" hidden>You are an expert at expanding English abbreviations and acronyms.
 
 For the input abbreviation "{selection}", output in EXACTLY this format,
 with a line break between the two lines:

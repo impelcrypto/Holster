@@ -5,3 +5,5 @@ build.noindex/
 *.xcodeproj
 *.profraw
 .omo/
+output/
+.playwright-cli/
