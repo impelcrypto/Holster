@@ -102,7 +102,7 @@ Rules:
 Example:
 
 Input:
-Get well soon! It seems a lot of people are getting sick in Singapore.
+It seems a lot of people are getting sick around the office.
 
 Output:
 
@@ -110,7 +110,7 @@ No grammar corrections needed.
 
 Natural Rephrase:
 
-Get well soon! It seems *a cold is going around* in Singapore.
+It seems *a bug is going around* the office.
 
 | Original Part | Natural Version | Why |
 | --- | --- | --- |

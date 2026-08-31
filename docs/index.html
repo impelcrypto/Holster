@@ -13,8 +13,13 @@
 <meta property="og:title" content="Holster — Run your own prompts on selected text, anywhere in macOS">
 <meta property="og:description" content="Select text in any app, press a hotkey, and the answer streams into a floating markdown window. No telemetry, no backend, MIT-licensed.">
 <meta property="og:url" content="https://impelcrypto.github.io/Holster/">
-<meta property="og:image" content="https://impelcrypto.github.io/Holster/assets/icon.png">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://impelcrypto.github.io/Holster/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Holster — Run your own prompts on selected text, anywhere in macOS">
+<meta name="twitter:description" content="Select text in any app, press a hotkey, and the answer streams into a floating markdown window. No telemetry, no backend, MIT-licensed.">
+<meta name="twitter:image" content="https://impelcrypto.github.io/Holster/assets/og.jpg">
 <script>
   (() => {
     const param = new URLSearchParams(location.search).get('theme');
@@ -45,7 +50,7 @@
     --shadow: 0 24px 70px rgba(29, 20, 12, .18);
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    :root:not([data-theme]) {
       color-scheme: dark;
       --bg: #19181B;
       --text: #F2F1F4;
@@ -185,7 +190,7 @@
     border: 1px solid var(--line); box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .06);
     max-width: 900px; margin: 0 auto;
   }
-  .demo-frame img { width: 100%; }
+  .demo-frame img, .demo-frame video { width: 100%; height: auto; display: block; }
 
   /* ---------- sections ---------- */
   section { padding: clamp(72px, 9vw, 120px) 0; position: relative; }
@@ -211,7 +216,7 @@
   .step p { color: var(--muted); font-size: 14.5px; }
 
   /* features */
-  .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .feat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .feat {
     border: 1px solid var(--line); border-radius: 18px; padding: 26px 24px; background: var(--card);
     transition: transform .25s, border-color .25s, box-shadow .25s;
@@ -273,7 +278,13 @@
   /* prompt tab viewer */
   .prompt-pair { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: stretch; }
   .prompt-pair > * { min-width: 0; }
-  .prompt-viewer { border: 1px solid var(--line); border-radius: 14px; background: var(--inset); overflow: hidden; }
+  .prompt-viewer { position: relative; border: 1px solid var(--line); border-radius: 14px; background: var(--inset); overflow: hidden; }
+  .prompt-viewer::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 56px;
+    border-radius: 0 0 13px 13px; pointer-events: none; opacity: 0; transition: opacity .2s;
+    background: linear-gradient(transparent, var(--inset));
+  }
+  .prompt-viewer.fade::after { opacity: 1; }
   .prompt-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
   .prompt-tab {
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; cursor: pointer;
@@ -308,7 +319,7 @@
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; line-height: 1.7;
     padding: 16px 18px; overflow-x: auto;
   }
-  .codeblock .c { opacity: .5; }
+  .source-card { margin-bottom: 18px; }
   .copy {
     position: absolute; top: 9px; right: 9px; font: 600 12px/1 -apple-system, system-ui, sans-serif;
     color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 8px;
@@ -350,7 +361,13 @@
   }
   @media (max-width: 620px) {
     .feat-grid, .prov-grid { grid-template-columns: 1fr; }
-    .nav-links a:not([href="#install"]) { display: none; }
+    .nav-inner { gap: 16px; }
+    .nav-right { min-width: 0; gap: 12px; }
+    .nav-links { gap: 16px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+    .nav-links::-webkit-scrollbar { display: none; }
+    .nav-links a { white-space: nowrap; }
+    .nav-gh { padding: 7px 10px; }
+    .nav-gh-label { display: none; }
     .wrap { width: min(1080px, 100% - 32px); }
     .hero-icon { width: 76px; height: 76px; }
     .hero-sub { font-size: 15.5px; }
@@ -401,9 +418,9 @@
       <a href="#providers">Providers</a>
       <a href="#install">Install</a>
     </div>
-    <a class="nav-gh" href="https://github.com/impelcrypto/Holster" target="_blank" rel="noopener">
+    <a class="nav-gh" aria-label="GitHub" href="https://github.com/impelcrypto/Holster" target="_blank" rel="noopener">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-      GitHub
+      <span class="nav-gh-label">GitHub</span>
     </a>
     <button class="theme-btn" type="button" aria-label="Toggle color theme">
       <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
@@ -436,10 +453,9 @@
       <a class="btn btn-ghost" href="https://github.com/impelcrypto/Holster" target="_blank" rel="noopener">View on GitHub</a>
     </div>
     <div class="demo-frame reveal">
-      <picture>
-        <source srcset="assets/demo-still.jpg" media="(prefers-reduced-motion: reduce)">
-        <img src="assets/demo.gif" alt="Selecting a sentence in TextEdit, pressing the hotkey, and the Grammar Teacher command streaming corrections into a floating window" width="1000" height="575">
-      </picture>
+      <video width="1000" height="576" autoplay muted loop playsinline poster="assets/demo-still.jpg" aria-label="Selecting a sentence in TextEdit, pressing the hotkey, and the Grammar Teacher command streaming corrections into a floating window">
+        <source src="assets/demo.mp4" type="video/mp4">
+      </video>
     </div>
   </div>
 </header>
@@ -584,7 +600,7 @@ Rules:
 Example:
 
 Input:
-Get well soon! It seems a lot of people are getting sick in Singapore.
+It seems a lot of people are getting sick around the office.
 
 Output:
 
@@ -592,7 +608,7 @@ No grammar corrections needed.
 
 Natural Rephrase:
 
-Get well soon! It seems *a cold is going around* in Singapore.
+It seems *a bug is going around* the office.
 
 | Original Part | Natural Version | Why |
 | --- | --- | --- |
@@ -663,6 +679,11 @@ Meaning (JP): なるべく早く
           <h3>Fallback provider</h3>
           <p>If the primary fails before answering, the fallback takes over. The hotkey carries on.</p>
         </div>
+        <div class="feat reveal" style="--d:.18s">
+          <div class="feat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l7.5 16 2-6.5L20 11 4 4Z"/></svg></div>
+          <h3>Focus stays where you put it</h3>
+          <p>The app never activates, so your editor keeps the cursor. Click away and the panel moves behind your windows instead of vanishing.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -672,7 +693,7 @@ Meaning (JP): なるべく早く
       <div class="privacy-panel reveal">
         <p class="eyebrow">Privacy</p>
         <h2>No telemetry. <span class="grad-text">No backend.</span></h2>
-        <p>Your selected text goes to the endpoint you configure and nowhere else.</p>
+        <p>Your selected text goes to the endpoint you configure and nowhere else. API keys live in the macOS Keychain, never in config files. The clipboard is restored after every capture, marked transient so clipboard managers don't log it.</p>
       </div>
     </div>
   </section>
@@ -722,14 +743,21 @@ brew install --cask holster</pre>
         </div>
         <div class="install-card reveal" style="--d:.1s">
           <h3>Direct download</h3>
-          <p>Download the <a href="https://github.com/impelcrypto/Holster/releases/latest" target="_blank" rel="noopener">latest release</a>, unzip it, and drag <code>Holster.app</code> into Applications.</p>
-          <div class="codeblock">
-            <pre><span class="c"># or build from source</span>
-git clone https://github.com/impelcrypto/Holster.git
+          <p>Unzip it, drag <code>Holster.app</code> into Applications, done.</p>
+          <a class="btn btn-ghost" href="https://github.com/impelcrypto/Holster/releases/latest" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v9.59l3.3-3.3a1 1 0 1 1 1.4 1.42l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.42l3.3 3.3V4a1 1 0 0 1 1-1Zm-7 15a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"/></svg>
+            Download the zip
+          </a>
+        </div>
+      </div>
+      <div class="install-card source-card reveal">
+        <h3>Build from source</h3>
+        <p>Everything goes through SPM. You need Xcode installed for Swift 6.</p>
+        <div class="codeblock">
+          <pre>git clone https://github.com/impelcrypto/Holster.git
 cd Holster &amp;&amp; make install</pre>
-            <button class="copy" aria-live="polite" data-copy="git clone https://github.com/impelcrypto/Holster.git
+          <button class="copy" aria-live="polite" data-copy="git clone https://github.com/impelcrypto/Holster.git
 cd Holster && make install" type="button">Copy</button>
-          </div>
         </div>
       </div>
       <div class="callout reveal">
@@ -784,6 +812,10 @@ cd Holster && make install" type="button">Copy</button>
   }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
   document.querySelectorAll('.reveal').forEach(el => { io.observe(el); });
 
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll('video[autoplay]').forEach(v => { v.removeAttribute('autoplay'); v.pause(); });
+  }
+
   const nav = document.querySelector('.nav');
   const onScroll = () => nav.classList.toggle('scrolled', scrollY > 10);
   addEventListener('scroll', onScroll, { passive: true });
@@ -803,10 +835,39 @@ cd Holster && make install" type="button">Copy</button>
 
   const promptTabs = [...document.querySelectorAll('.prompt-tab')];
   const promptPanes = [...document.querySelectorAll('.prompt-pane')];
-  promptTabs.forEach((tab, i) => tab.addEventListener('click', () => {
-    promptTabs.forEach((t, j) => t.setAttribute('aria-selected', String(i === j)));
+  const promptViewer = document.querySelector('.prompt-viewer');
+  const updateFade = () => {
+    const pane = promptPanes.find(p => !p.hidden);
+    const scrollable = pane.scrollHeight - pane.clientHeight > 4;
+    const atBottom = pane.scrollTop >= pane.scrollHeight - pane.clientHeight - 4;
+    promptViewer.classList.toggle('fade', scrollable && !atBottom);
+  };
+  const selectPrompt = i => {
+    promptTabs.forEach((t, j) => {
+      t.setAttribute('aria-selected', String(i === j));
+      t.tabIndex = i === j ? 0 : -1;
+    });
     promptPanes.forEach((p, j) => { p.hidden = i !== j; });
-  }));
+    updateFade();
+  };
+  selectPrompt(0);
+  promptTabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => selectPrompt(i));
+    tab.addEventListener('keydown', e => {
+      const n = promptTabs.length;
+      const j = e.key === 'ArrowRight' ? (i + 1) % n
+        : e.key === 'ArrowLeft' ? (i - 1 + n) % n
+        : e.key === 'Home' ? 0
+        : e.key === 'End' ? n - 1 : -1;
+      if (j < 0) return;
+      e.preventDefault();
+      selectPrompt(j);
+      promptTabs[j].focus();
+    });
+  });
+  promptPanes.forEach(p => p.addEventListener('scroll', updateFade, { passive: true }));
+  addEventListener('resize', updateFade);
+  addEventListener('load', updateFade);
   const promptCopy = document.querySelector('.prompt-copy');
   promptCopy.addEventListener('click', async () => {
     const pane = promptPanes.find(p => !p.hidden);
