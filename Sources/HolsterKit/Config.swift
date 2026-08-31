@@ -228,6 +228,40 @@ extension Config {
         return (name, provider, command.fallbackModel ?? command.model)
     }
 
+    /// The primary request plus the fallback one, if a fallback is configured.
+    public func makeRequests(
+        for command: CommandConfig,
+        prompt: String,
+        system: String? = nil,
+        stream: Bool = true,
+        timeout: TimeInterval = 300
+    ) throws -> (primary: LLMRequest, fallback: LLMRequest?) {
+        let (providerName, provider) = try resolveProvider(for: command)
+        let primary = LLMRequest(
+            baseURL: provider.baseURL,
+            apiKey: provider.apiKey,
+            model: command.model,
+            prompt: prompt,
+            system: system,
+            reasoningEffort: command.resolvedReasoning(
+                providerName: providerName, model: command.model),
+            stream: stream,
+            timeout: timeout)
+        let fallback = resolveFallback(for: command).map {
+            LLMRequest(
+                baseURL: $0.provider.baseURL,
+                apiKey: $0.provider.apiKey,
+                model: $0.model,
+                prompt: prompt,
+                system: system,
+                reasoningEffort: command.resolvedReasoning(
+                    providerName: $0.name, model: $0.model),
+                stream: stream,
+                timeout: timeout)
+        }
+        return (primary, fallback)
+    }
+
     private static func describe(_ error: DecodingError) -> String {
         switch error {
         case .keyNotFound(let key, let context):

@@ -24,20 +24,117 @@ final class RunViewModelTests: XCTestCase {
         XCTAssertEqual(model.state, .done)
     }
 
-    func testSmartCopyFallsBackToFullResponseNotSelection() {
+    /// Drives a model to .done with `text` and captures what it copies.
+    private func makeDoneModel(_ text: String) -> (RunViewModel, () -> String?) {
         let model = makeModel()
-        model.selection = "the user's own input"
-        model.append("# Heading only\n\n| a | b |\n|---|---|\n| 1 | 2 |")
+        model.append(text)
         model.finish()
-        XCTAssertEqual(model.smartCopyText, model.fullText)
-        XCTAssertFalse(model.smartCopyText.contains("the user's own input"))
+        // Boxed so the caller reads the value after the copy, not at capture.
+        final class Box: @unchecked Sendable { var value: String? }
+        let box = Box()
+        model.writeToPasteboard = { box.value = $0 }
+        return (model, { box.value })
     }
 
-    func testSmartCopyExtractsBeforeFlush() {
+    func testSmartCopyCopiesWhatTheSelectorPicked() async throws {
+        let (model, copied) = makeDoneModel("Preamble:\nThe answer.")
+        model.onSmartCopy = { _ in "The answer." }
+        var closed = false
+        model.onCopied = { closed = true }
+        model.performSmartCopy()
+        XCTAssertTrue(model.isSelecting)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(copied(), "The answer.")
+        XCTAssertFalse(model.isSelecting)
+        XCTAssertTrue(closed)
+    }
+
+    func testSelectorFailureFallsBackToTheFullResponseNotTheSelection() async throws {
+        let (model, copied) = makeDoneModel("# Heading only\n\n| a | b |")
+        model.selection = "the user's own input"
+        model.onSmartCopy = { _ in nil }
+        model.performSmartCopy()
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(copied(), model.fullText)
+        XCTAssertFalse(copied()?.contains("the user's own input") ?? true)
+    }
+
+    func testCancellingSmartCopyPreventsTheLaterClipboardWrite() async throws {
+        let (model, copied) = makeDoneModel("full response")
+        model.onSmartCopy = { _ in
+            try? await Task.sleep(for: .milliseconds(200))
+            return "picked"
+        }
+        var closed = false
+        model.onCopied = { closed = true }
+        model.performSmartCopy()
+        model.cancelSmartCopy()
+        XCTAssertFalse(model.isSelecting)
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertNil(copied())
+        XCTAssertFalse(closed)
+    }
+
+    func testRepeatedSmartCopyDoesNotStartConcurrentRequests() async throws {
+        let (model, _) = makeDoneModel("full response")
+        final class Counter: @unchecked Sendable { var value = 0 }
+        let calls = Counter()
+        model.onSmartCopy = { _ in
+            calls.value += 1
+            try? await Task.sleep(for: .milliseconds(150))
+            return "picked"
+        }
+        model.performSmartCopy()
+        model.performSmartCopy()
+        model.performSmartCopy()
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(calls.value, 1)
+    }
+
+    func testCopyAllCopiesTheFullResponseWithoutCallingTheSelector() async throws {
+        let (model, copied) = makeDoneModel("Preamble:\nThe answer.")
+        var selectorCalled = false
+        model.onSmartCopy = { _ in
+            selectorCalled = true
+            return "The answer."
+        }
+        var closed = false
+        model.onCopied = { closed = true }
+        model.copyAll()
+        XCTAssertEqual(copied(), "Preamble:\nThe answer.")
+        XCTAssertEqual(model.toast, "Copied")
+        XCTAssertFalse(closed)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(selectorCalled)
+    }
+
+    /// ⇧⌘↩ during Selecting… must win: the window stays open, so a selector
+    /// landing afterwards would silently replace what the user just took.
+    func testCopyAllDuringSelectionCancelsTheSelector() async throws {
+        let (model, copied) = makeDoneModel("full response")
+        model.onSmartCopy = { _ in
+            try? await Task.sleep(for: .milliseconds(200))
+            return "picked"
+        }
+        model.performSmartCopy()
+        model.copyAll()
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(copied(), "full response")
+        XCTAssertFalse(model.isSelecting)
+    }
+
+    func testSmartCopyIsIgnoredBeforeTheResponseFinishes() {
         let model = makeModel()
-        model.append("The corrected sentence.")
-        XCTAssertEqual(model.markdown, "")
-        XCTAssertEqual(model.smartCopyText, "The corrected sentence.")
+        model.append("partial")
+        model.beginStreaming()
+        var called = false
+        model.onSmartCopy = { _ in
+            called = true
+            return nil
+        }
+        model.performSmartCopy()
+        XCTAssertFalse(model.isSelecting)
+        XCTAssertFalse(called)
     }
 
     /// A double/triple click selects without dragging, which the old

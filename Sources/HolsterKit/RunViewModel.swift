@@ -17,6 +17,8 @@ public final class RunViewModel: ObservableObject {
     @Published public private(set) var isReasoning = false
     /// Text the user has highlighted in the result; Speak targets this.
     @Published public private(set) var selectedText = ""
+    /// The Smart Copy selector request is in flight.
+    @Published public private(set) var isSelecting = false
 
     public let commandName: String
     /// Switches to the fallback model name when the primary provider fails.
@@ -24,17 +26,22 @@ public final class RunViewModel: ObservableObject {
 
     /// The captured selection; retry reuses it.
     public var selection: String?
+    /// The prompt actually sent, so Smart Copy sees the task the model saw.
+    public var renderedPrompt: String?
 
     public var onRetry: (() -> Void)?
     public var onSpeak: ((String) -> Void)?
     public var onCopied: (() -> Void)?
     public var onStop: (() -> Void)?
+    /// Picks the part of the response worth pasting; nil means copy it whole.
+    public var onSmartCopy: ((String) async -> String?)?
 
     private let copyOnSelect: Bool
     private var accumulated = ""
     private var flushScheduled = false
     private var toastTask: Task<Void, Never>?
     private var autoCopyTask: Task<Void, Never>?
+    private var smartCopyTask: Task<Void, Never>?
 
     /// Overridden in tests so they never clobber the real clipboard.
     var writeToPasteboard: (String) -> Void = { text in
@@ -129,10 +136,39 @@ public final class RunViewModel: ObservableObject {
         state = .failed(message)
     }
 
-    /// Falls back to the full response, not the captured selection: ⌘↩ must
-    /// never silently echo the user's own input back at them.
-    public var smartCopyText: String {
-        SmartCopy.extract(from: fullText) ?? fullText
+    /// ⌘↩: ask the selector what to paste, then copy and close. A failed or
+    /// cancelled selection falls back to the full response, never to the
+    /// captured selection — ⌘↩ must not echo the user's own input back.
+    public func performSmartCopy() {
+        guard state == .done, smartCopyTask == nil else { return }
+        cancelAutoCopy()
+        let response = fullText
+        isSelecting = true
+        smartCopyTask = Task { [weak self] in
+            let picked = await self?.onSmartCopy?(response)
+            guard !Task.isCancelled, let self else { return }
+            self.isSelecting = false
+            self.smartCopyTask = nil
+            self.writeToPasteboard(picked ?? response)
+            self.onCopied?()
+        }
+    }
+
+    /// ⇧⌘↩: the whole response, right now, window stays open.
+    public func copyAll() {
+        // Without this an in-flight selector would land moments later and
+        // overwrite what the user just deliberately took.
+        cancelSmartCopy()
+        cancelAutoCopy()
+        writeToPasteboard(fullText)
+        flashToast("Copied")
+    }
+
+    /// Esc or a closing panel: no clipboard write may follow.
+    public func cancelSmartCopy() {
+        smartCopyTask?.cancel()
+        smartCopyTask = nil
+        isSelecting = false
     }
 
     public var fullText: String {

@@ -9,6 +9,7 @@ public final class CommandRunner {
     private let speaker: Speaker
     private lazy var panel = ResultPanel()
     private var currentTask: Task<Void, Never>?
+    private weak var currentViewModel: RunViewModel?
 
     public init(store: ConfigStore, speaker: Speaker) {
         self.store = store
@@ -21,9 +22,13 @@ public final class CommandRunner {
 
     private func start(_ command: CommandConfig, selection: String?) {
         currentTask?.cancel()
+        // A superseded run's selector would otherwise land later, overwrite the
+        // clipboard, and close the panel this run is about to present.
+        currentViewModel?.cancelSmartCopy()
         speaker.stop()
 
         let viewModel = RunViewModel(command: command)
+        currentViewModel = viewModel
         viewModel.onCopied = { [weak self] in self?.panel.close() }
         viewModel.onSpeak = { [weak self] text in
             self?.speaker.speak(text, config: self?.store.config?.tts)
@@ -36,8 +41,13 @@ public final class CommandRunner {
             self?.currentTask?.cancel()
             viewModel?.finish()
         }
-        panel.onClose = { [weak self] in
+        viewModel.onSmartCopy = { [weak self, weak viewModel] response in
+            guard let self, let viewModel else { return nil }
+            return await self.selectCopyTarget(command, response: response, viewModel: viewModel)
+        }
+        panel.onClose = { [weak self, weak viewModel] in
             self?.currentTask?.cancel()
+            viewModel?.cancelSmartCopy()
         }
 
         currentTask = Task { [weak self] in
@@ -77,28 +87,14 @@ public final class CommandRunner {
             guard let config = store.config else {
                 throw ConfigError.validation("No valid config loaded")
             }
-            let (providerName, provider) = try config.resolveProvider(for: command)
             let clipboard = NSPasteboard.general.string(forType: .string)
             let prompt = PromptTemplate.render(template, selection: selection, clipboard: clipboard)
-            let request = LLMRequest(
-                baseURL: provider.baseURL,
-                apiKey: provider.apiKey,
-                model: command.model,
-                prompt: prompt,
-                reasoningEffort: command.resolvedReasoning(
-                    providerName: providerName, model: command.model))
+            viewModel.renderedPrompt = prompt
+            let requests = try config.makeRequests(for: command, prompt: prompt)
             let fallback = config.resolveFallback(for: command)
-            let fallbackRequest = fallback.map {
-                LLMRequest(
-                    baseURL: $0.provider.baseURL,
-                    apiKey: $0.provider.apiKey,
-                    model: $0.model,
-                    prompt: prompt,
-                    reasoningEffort: command.resolvedReasoning(
-                        providerName: $0.name, model: $0.model))
-            }
 
-            for try await event in LLMClient.streamWithFallback(request, fallback: fallbackRequest) {
+            for try await event in LLMClient.streamWithFallback(
+                requests.primary, fallback: requests.fallback) {
                 guard !Task.isCancelled else { return }
                 switch event {
                 case .reasoning: viewModel.noteReasoning()
@@ -119,6 +115,31 @@ public final class CommandRunner {
                 panel.present(makeView(viewModel))
             }
         }
+    }
+
+    /// One extra non-streaming request on the command's own provider. Ten
+    /// seconds per attempt: ⌘↩ is a clipboard action, not a generation.
+    private func selectCopyTarget(
+        _ command: CommandConfig,
+        response: String,
+        viewModel: RunViewModel
+    ) async -> String? {
+        let context = SmartCopySelector.Context(
+            commandName: command.name,
+            // The rendered prompt, not a re-read of the file: it carries the
+            // clipboard only when the template actually asked for it.
+            instructions: viewModel.renderedPrompt ?? "",
+            selection: viewModel.selection ?? "")
+        guard let config = store.config,
+              let requests = try? config.makeRequests(
+                  for: command,
+                  prompt: SmartCopySelector.makePrompt(context: context, response: response),
+                  system: SmartCopySelector.systemPrompt,
+                  stream: false,
+                  timeout: 10)
+        else { return nil }
+        return await SmartCopySelector.run(
+            response: response, primary: requests.primary, fallback: requests.fallback)
     }
 
     private func makeView(_ viewModel: RunViewModel) -> ResultView {
