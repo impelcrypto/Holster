@@ -307,10 +307,11 @@
   /* the pane fills its overflow-hidden parent, so an outside ring gets clipped */
   .prompt-pane:focus-visible { outline-offset: -3px; }
   @media (min-width: 901px) {
-    /* crop the settings shot to the viewer's height so the two columns stay level */
+    /* the shot column matches the viewer's height; the leftover strip is background,
+       never a crop — the Save button lives a few pixels from the right edge */
     .prompt-pair .shot { display: flex; flex-direction: column; }
-    .prompt-pair .shot-frame { flex: 1; min-height: 0; }
-    .prompt-pair .shot-frame img { height: 100%; object-fit: cover; object-position: left top; }
+    .prompt-pair .shot-frame { flex: 1; min-height: 0; background: var(--pane-bg); }
+    .prompt-pair .shot-frame img { height: 100%; object-fit: contain; object-position: left top; }
   }
   @media (max-width: 900px) {
     .prompt-pair { grid-template-columns: 1fr; }
