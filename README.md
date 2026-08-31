@@ -62,7 +62,7 @@ brew trust impelcrypto/tap   # Homebrew refuses casks from taps you have not tru
 brew install --cask holster
 ```
 
-Or download `Holster-0.1.0.zip` from the
+Or download `Holster-0.1.1.zip` from the
 [latest release](https://github.com/impelcrypto/Holster/releases/latest), unzip
 it, and drag `Holster.app` into `/Applications`.
 
@@ -282,8 +282,8 @@ Issues and pull requests are welcome. Run `make test` before opening one.
 
 1. Bump `VERSION`. One line, no `v` prefix. Semver: patch for fixes, minor for
    new commands or settings, major once an existing `config.yaml` stops loading.
-2. Commit it and merge to `main`.
-3. Run `scripts/release.sh` from `main`.
+2. Commit it and merge to `master`.
+3. Run `scripts/release.sh` from `master`.
 
 The script stops on Intel or on a dirty tree, builds the app, zips it with
 `ditto` so the code signature survives, and prints the sha256. When a
