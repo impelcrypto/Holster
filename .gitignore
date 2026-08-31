@@ -7,3 +7,4 @@ build.noindex/
 .omo/
 output/
 .playwright-cli/
+report/

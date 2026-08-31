@@ -11,7 +11,9 @@ Compare this branch against its parent branch, then write a PR summary.
 ## Rules
 
 - Use simple English with short, clear sentences.
-- Keep the summary concise and non-repetitive: state each point once. Don't restate the background in the review notes, or repeat the same change across sections.
+- Write as little as the reviewer needs. Background in two or three sentences, each review note in one or two. When a sentence only repeats what the diff already shows, cut it.
+- State each point once. Don't restate the background in the review notes, or repeat the same change across sections.
+- Spend the review notes on what the diff cannot show: a risk, a trade-off, a decision waiting on the reviewer.
 - Describe what changed and why — never file/line counts (e.g. "39 files, +5,301 lines").
 - Follow `.github/PULL_REQUEST_TEMPLATE.md`; use only the sections it defines, add none.
 - Output to `report/PR_SUMMARY.md` (create `report/` if missing).
