@@ -48,7 +48,9 @@ them in git. Built as a stable replacement for Raycast AI custom commands.
 ## Privacy
 
 Holster has no telemetry and no backend. Your selected text goes to the endpoint
-you configure and nowhere else.
+you configure and nowhere else. The one exception is text-to-speech. With
+`tts.provider: edge`, the default in the example config, whatever you ask Holster
+to speak goes to Microsoft's read-aloud service.
 
 ## Install
 
