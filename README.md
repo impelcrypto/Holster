@@ -33,7 +33,9 @@ them in git. Built as a stable replacement for Raycast AI custom commands.
 - Prompts and commands are plain files: git-friendly, hot-reloaded, and editable
   from the built-in Settings UI
 - Streaming markdown rendering, GFM tables included
-- Smart copy pulls out the corrected sentence instead of the whole response
+- Smart copy asks the model which part of the answer you meant to paste — the
+  translation, the rewritten email, the code — and copies that instead of the
+  whole response (one extra request per ⌘↩)
 - API keys go to the macOS Keychain, never to `config.yaml`
 - A fallback provider takes over when the primary one dies before any output
 - Optional text-to-speech: free Edge voices, an OpenAI-compatible
@@ -228,12 +230,17 @@ UserDefaults rather than `config.yaml`.
 
 | Key | Action |
 | --- | --- |
-| ⌘↩ | Copy the corrected sentence (smart copy) and close |
+| ⌘↩ | Smart copy: the model picks the part worth pasting, then close |
 | ⇧⌘↩ | Copy the full response |
 | ⌘S | Speak the selection, or the whole response when nothing is selected |
 | ⌘. | Stop generating (Esc also cancels the stream on close) |
 | ⌘R | Retry (after an error) |
 | Esc | Close |
+
+⌘↩ costs one extra non-streaming request on the command's own provider and
+model. The selector only returns line numbers into the response, so it can add
+nothing of its own to your clipboard; if it fails or you press Esc while it is
+running, you get the full response. ⇧⌘↩ never calls it.
 
 ## CLI
 

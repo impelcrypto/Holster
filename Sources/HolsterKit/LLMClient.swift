@@ -5,25 +5,33 @@ public struct LLMRequest {
     public var apiKey: String?
     public var model: String
     public var prompt: String
+    /// Prepended as a system message; nil sends the user message alone, exactly
+    /// as before, so endpoints that dislike a system role are unaffected.
+    public var system: String?
     /// "low" / "medium" / "high"; nil omits the field entirely — some
     /// OpenAI-compatible endpoints reject it for non-reasoning models.
     public var reasoningEffort: String?
     public var stream: Bool
+    public var timeout: TimeInterval
 
     public init(
         baseURL: String,
         apiKey: String? = nil,
         model: String,
         prompt: String,
+        system: String? = nil,
         reasoningEffort: String? = nil,
-        stream: Bool = true
+        stream: Bool = true,
+        timeout: TimeInterval = 300
     ) {
         self.baseURL = baseURL
         self.apiKey = apiKey
         self.model = model
         self.prompt = prompt
+        self.system = system
         self.reasoningEffort = reasoningEffort
         self.stream = stream
+        self.timeout = timeout
     }
 }
 
@@ -176,7 +184,7 @@ public enum LLMClient {
         if !sawContent { throw LLMError.emptyResponse }
     }
 
-    private static func makeChatRequest(_ request: LLMRequest) throws -> URLRequest {
+    static func makeChatRequest(_ request: LLMRequest) throws -> URLRequest {
         struct Body: Encodable {
             struct Message: Encodable {
                 let role: String
@@ -197,12 +205,17 @@ public enum LLMClient {
         }
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "POST"
-        urlRequest.timeoutInterval = 300
+        urlRequest.timeoutInterval = request.timeout
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         applyAuth(&urlRequest, apiKey: request.apiKey)
+        var messages: [Body.Message] = []
+        if let system = request.system {
+            messages.append(.init(role: "system", content: system))
+        }
+        messages.append(.init(role: "user", content: request.prompt))
         urlRequest.httpBody = try JSONEncoder().encode(Body(
             model: request.model,
-            messages: [.init(role: "user", content: request.prompt)],
+            messages: messages,
             stream: request.stream,
             reasoningEffort: request.reasoningEffort))
         return urlRequest

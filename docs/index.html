@@ -228,12 +228,10 @@
   .feat-icon svg { width: 21px; height: 21px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .feat h3 { font-size: 16.5px; margin-bottom: 8px; letter-spacing: -.01em; }
   .feat p { color: var(--muted); font-size: 14.5px; }
-  .feat p code, .step p code, .also code, .section-sub code, .tts-note code {
+  .feat p code, .step p code, .section-sub code {
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em;
     background: var(--inset); border-radius: 5px; padding: 1px 5px;
   }
-  .also { margin-top: 26px; color: var(--muted); font-size: 14.5px; border-left: 2px solid var(--copper); padding-left: 16px; max-width: 74ch; }
-
   /* privacy */
   .privacy-panel {
     border: 1px solid var(--line); border-radius: 22px; text-align: center;
@@ -267,17 +265,8 @@
   .prov p { color: var(--muted); font-size: 14.5px; }
   .prov p code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em; background: var(--inset); border-radius: 5px; padding: 1px 5px; }
 
-  /* vs cards & use-case pills */
-  .vs-p { font-size: 14.5px; padding-top: 12px; border-top: 1px solid var(--line); }
-  .vs-p:first-of-type { padding-top: 2px; border-top: 0; }
-  .vs-p strong {
-    display: block; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px;
-    text-transform: uppercase; letter-spacing: .08em; font-weight: 600; margin-bottom: 4px;
-  }
-  .vs-p.holster strong { color: var(--accent-ink); }
-  .vs-p.raycast, .vs-p.raycast strong { color: var(--muted); }
+  /* use-case pills */
   .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
-  .tts-note { color: var(--muted); font-size: 14.5px; max-width: 64ch; margin-bottom: 40px; }
   .shot { margin: 0; }
   .shot-frame { display: block; max-width: 720px; margin-inline: 0; }
   .shot-cap { font-size: 13px; color: var(--muted); margin-top: 14px; }
@@ -327,7 +316,7 @@
 
   @media (max-width: 900px) {
     .feat-grid, .prov-grid { grid-template-columns: 1fr 1fr; }
-    .steps, .vs-grid { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
   }
   @media (max-width: 760px) {
     .install-grid { grid-template-columns: 1fr; }
@@ -411,8 +400,7 @@
     </div>
     <h1>Run your own prompts on selected text, <span class="grad">anywhere in macOS</span>.</h1>
     <p class="hero-sub">
-      Select text in any app, press your hotkey, and the answer streams into a floating
-      markdown window. Built as a stable replacement for Raycast AI custom commands.
+      Select text in any app, press a hotkey, and watch the answer stream into a floating markdown window.
     </p>
     <div class="cta">
       <a class="btn btn-primary" href="#install">
@@ -435,19 +423,19 @@
     <div class="wrap">
       <p class="eyebrow reveal">How it works</p>
       <h2 class="reveal">One hotkey between a selection and an answer</h2>
-      <p class="section-sub reveal">Each command is a prompt file with a provider, a model, and a global hotkey of its own.</p>
+      <p class="section-sub reveal">One prompt file. One hotkey. Your model.</p>
       <div class="steps">
         <div class="step reveal"><span class="step-num">01</span>
           <h3>Select</h3>
-          <p>Highlight text in any app. Mail, Xcode, Slack, the browser. Anything you can select.</p>
+          <p>Highlight text anywhere: Mail, Slack, the browser.</p>
         </div>
         <div class="step reveal" style="--d:.1s"><span class="step-num">02</span>
           <h3>Press your hotkey</h3>
-          <p>The example config ships a grammar check on <code>⌘⇧G</code>. Add your own commands with their own hotkeys; Settings warns about duplicates.</p>
+          <p>Grammar check ships on <code>⌘⇧G</code>. Add as many commands as your fingers remember.</p>
         </div>
         <div class="step reveal" style="--d:.2s"><span class="step-num">03</span>
           <h3>Read, copy, done</h3>
-          <p>The answer streams into a floating markdown window. <code>⌘↩</code> copies the result and closes it.</p>
+          <p>Watch the answer stream in. <code>⌘↩</code> copies the useful bit and closes the window.</p>
         </div>
       </div>
     </div>
@@ -457,7 +445,7 @@
     <div class="wrap">
       <p class="eyebrow reveal">Prompts</p>
       <h2 class="reveal">What you holster is up to you</h2>
-      <p class="section-sub reveal">A command is one prompt file and one hotkey. The selected text lands in <code>{selection}</code>; you decide what comes back.</p>
+      <p class="section-sub reveal">Drop <code>{selection}</code> into a prompt. That's the whole trick.</p>
       <div class="pill-row reveal">
         <span class="badge">Grammar teacher</span>
         <span class="badge">Translator</span>
@@ -465,7 +453,6 @@
         <span class="badge">Email polish</span>
         <span class="badge">Pronunciation coach</span>
       </div>
-      <p class="tts-note reveal">The pronunciation coach pairs with the built-in speak key (<code>⌘S</code>): an unfamiliar word comes back with phonetic symbols and gets read aloud by a free Edge voice.</p>
       <figure class="shot reveal">
         <a class="demo-frame shot-frame" href="assets/command-editor.png" target="_blank" rel="noopener" aria-label="Open the command editor screenshot at full size">
           <img src="assets/command-editor.png" alt="Holster settings window: the Grammar Teacher command editor with hotkey, provider, model, fallback, and prompt fields" width="802" height="813" loading="lazy">
@@ -482,60 +469,19 @@
       <p class="section-sub reveal">Native Swift and SwiftUI. No Electron, one small binary.</p>
       <div class="feat-grid">
         <div class="feat reveal">
-          <div class="feat-icon"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg></div>
-          <h3>Prompts are plain files</h3>
-          <p>Commands live under <code>~/.config/holster/</code>: git-friendly, hot-reloaded, and editable from the Settings UI or your own editor.</p>
-        </div>
-        <div class="feat reveal" style="--d:.06s">
-          <div class="feat-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 11h11M4 16h14M4 21h8"/></svg></div>
+          <div class="feat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 11h11M4 16h14M4 21h8"/></svg></div>
           <h3>Streaming markdown</h3>
-          <p>Answers render as they arrive, GFM tables included, in a window that floats above whatever you were doing.</p>
-        </div>
-        <div class="feat reveal" style="--d:.12s">
-          <div class="feat-icon"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
-          <h3>Smart copy</h3>
-          <p><code>⌘↩</code> pulls out the corrected sentence instead of the whole response. <code>⇧⌘↩</code> still copies everything.</p>
-        </div>
-        <div class="feat reveal">
-          <div class="feat-icon"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="3.5"/><path d="M10.5 12.5 21 2"/><path d="m15.5 7.5 3 3"/></svg></div>
-          <h3>Keys stay in the Keychain</h3>
-          <p>API keys entered in Settings go to the macOS Keychain, never to <code>config.yaml</code>. Plaintext keys in an existing config get migrated and stripped.</p>
+          <p>Answers arrive as GFM, tables included, in a window above whatever you were doing.</p>
         </div>
         <div class="feat reveal" style="--d:.06s">
-          <div class="feat-icon"><svg viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M21 3 3 21"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/></svg></div>
-          <h3>Fallback provider</h3>
-          <p>When the primary endpoint dies before any output, a second provider takes over. The hotkey keeps working while one of them is down.</p>
+          <div class="feat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
+          <h3>Smart copy</h3>
+          <p><code>⌘↩</code> asks the model which part you meant to paste and copies that. <code>⇧⌘↩</code> copies the whole sermon.</p>
         </div>
         <div class="feat reveal" style="--d:.12s">
-          <div class="feat-icon"><svg viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg></div>
-          <h3>Headless CLI</h3>
-          <p>Pipe text through the same pipeline with no GUI and no permissions: <code>echo "It seem wrong." | Holster --run "Grammar Teacher"</code>.</p>
-        </div>
-      </div>
-      <p class="also reveal">Also in the box: optional text-to-speech (free Edge voices, an OpenAI-compatible <code>/audio/speech</code>, or the built-in macOS voice), and a clipboard restore marked transient so clipboard managers don't log a duplicate.</p>
-    </div>
-  </section>
-
-  <section id="vs">
-    <div class="wrap">
-      <p class="eyebrow reveal">Compared</p>
-      <h2 class="reveal">Coming from Raycast AI?</h2>
-      <p class="section-sub reveal">Holster started life as a replacement for Raycast AI custom commands.</p>
-      <div class="prov-grid vs-grid">
-        <div class="prov reveal">
-          <h3>Price</h3>
-          <p class="vs-p holster"><strong>Holster</strong>Free. MIT-licensed, no account.</p>
-          <p class="vs-p raycast"><strong>Raycast AI</strong>Pro subscription at $8/month, frontier models another $8. Or bring an OpenAI, Anthropic, or Google key and pay per token.</p>
-        </div>
-        <div class="prov reveal" style="--d:.1s">
-          <h3>Models</h3>
-          <p class="vs-p holster"><strong>Holster</strong>Any OpenAI-compatible endpoint: local Ollama, the ChatGPT or Claude subscription you already have, OpenRouter.</p>
-          <p class="vs-p raycast"><strong>Raycast AI</strong>Raycast's model lineup, or keys from the big three providers.</p>
-        </div>
-        <div class="prov reveal" style="--d:.2s">
-          <h3>Result window</h3>
-          <p class="vs-p holster"><strong>Holster</strong>Floats until you close it. Click into another window and it keeps streaming.</p>
-          <p class="vs-p raycast"><strong>Raycast AI</strong>Spotlight-style window that dismisses when it loses focus.</p>
+          <div class="feat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M21 3 3 21"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/></svg></div>
+          <h3>Fallback provider</h3>
+          <p>If the primary fails before answering, the fallback takes over. The hotkey carries on.</p>
         </div>
       </div>
     </div>
@@ -555,7 +501,7 @@
     <div class="wrap">
       <p class="eyebrow reveal">Providers</p>
       <h2 class="reveal">Bring the model you already have</h2>
-      <p class="section-sub reveal">Holster talks to any OpenAI-compatible endpoint. Pick the route that matches what you already pay for, or pay nothing.</p>
+      <p class="section-sub reveal">Holster talks to any OpenAI-compatible endpoint. Pick the route that matches what you already pay for. Just kidding — you can also pay nothing.</p>
       <div class="prov-grid">
         <div class="prov reveal">
           <span class="prov-badge">Free</span>
@@ -570,7 +516,7 @@
         <div class="prov reveal" style="--d:.2s">
           <span class="prov-badge">Bring a key</span>
           <h3>Any API</h3>
-          <p>Presets for Gemini and OpenCode Go, plus a <code>custom</code> preset for OpenRouter or any other OpenAI-compatible endpoint.</p>
+          <p>Gemini and OpenCode Go presets, plus <code>custom</code> for OpenRouter and anything OpenAI-compatible.</p>
         </div>
       </div>
     </div>
@@ -596,7 +542,7 @@ brew install --cask holster</pre>
         </div>
         <div class="install-card reveal" style="--d:.1s">
           <h3>Direct download</h3>
-          <p>Grab the zip from the <a href="https://github.com/impelcrypto/Holster/releases/latest" target="_blank" rel="noopener">latest release</a>, unzip it, and drag <code>Holster.app</code> into Applications.</p>
+          <p>Download the <a href="https://github.com/impelcrypto/Holster/releases/latest" target="_blank" rel="noopener">latest release</a>, unzip it, and drag <code>Holster.app</code> into Applications.</p>
           <div class="codeblock">
             <pre><span class="c"># or build from source</span>
 git clone https://github.com/impelcrypto/Holster.git
@@ -607,8 +553,8 @@ cd Holster && make install" type="button">Copy</button>
         </div>
       </div>
       <div class="callout reveal">
-        <strong>First launch needs one approval.</strong> Holster is signed but not notarized, so macOS blocks it once with a malware warning.
-        Open System Settings → Privacy &amp; Security, scroll to Security, and click <strong>Open Anyway</strong>. Every launch after that is normal.
+        <strong>First launch needs one approval.</strong> macOS blocks Holster because it is signed, not notarized.
+        Open System Settings → Privacy &amp; Security and click <strong>Open Anyway</strong>. Once is enough.
       </div>
       <p class="req reveal">requires: macOS 14+ · Apple Silicon · one OpenAI-compatible endpoint</p>
     </div>
@@ -656,7 +602,7 @@ cd Holster && make install" type="button">Copy</button>
       if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
     }
   }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
-  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  document.querySelectorAll('.reveal').forEach(el => { io.observe(el); });
 
   const nav = document.querySelector('.nav');
   const onScroll = () => nav.classList.toggle('scrolled', scrollY > 10);

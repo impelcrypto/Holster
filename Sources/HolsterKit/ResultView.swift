@@ -88,6 +88,11 @@ struct ResultView: View {
         Rectangle().fill(HolsterTheme.hairline).frame(height: 1)
     }
 
+    private var statusLabel: String {
+        if model.isSelecting { return "Selecting…" }
+        return model.isReasoning && model.markdown.isEmpty ? "Reasoning…" : "Generating…"
+    }
+
     private var header: some View {
         HStack(spacing: 8) {
             Text(model.commandName)
@@ -100,8 +105,8 @@ struct ResultView: View {
                 .background(Color.primary.opacity(0.07), in: Capsule())
                 .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
             Spacer()
-            if model.state == .streaming {
-                Text(model.isReasoning && model.markdown.isEmpty ? "Reasoning…" : "Generating…")
+            if model.state == .streaming || model.isSelecting {
+                Text(statusLabel)
                     .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
                 PulsingDot()
@@ -192,15 +197,16 @@ struct ResultView: View {
             .buttonStyle(GhostButtonStyle())
             .keyboardShortcut("s", modifiers: .command)
             .disabled(model.selectedText.isEmpty && model.fullText.isEmpty)
-            Button("Copy All") { copy(model.fullText, closing: false) }
+            // Stays enabled during Selecting… as the immediate escape hatch.
+            Button("Copy All") { model.copyAll() }
                 .buttonStyle(GhostButtonStyle())
                 .keyboardShortcut(.return, modifiers: [.command, .shift])
                 .disabled(model.fullText.isEmpty)
             Button {
-                copy(model.smartCopyText, closing: true)
+                model.performSmartCopy()
             } label: {
                 HStack(spacing: 5) {
-                    Text("Copy")
+                    Text(model.isSelecting ? "Selecting…" : "Copy")
                     Text("⌘↩")
                         .font(.system(size: 10.5, weight: .semibold))
                         .foregroundStyle(.black.opacity(0.45))
@@ -208,21 +214,9 @@ struct ResultView: View {
             }
             .buttonStyle(AccentButtonStyle())
             .keyboardShortcut(.return, modifiers: .command)
-            .disabled(model.state != .done)
+            .disabled(model.state != .done || model.isSelecting)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-    }
-
-    private func copy(_ text: String, closing: Bool) {
-        model.cancelAutoCopy()
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        if closing {
-            model.onCopied?()
-        } else {
-            model.flashToast("Copied")
-        }
     }
 }
