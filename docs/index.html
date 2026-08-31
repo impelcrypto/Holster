@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Holster — Run your own prompts on selected text, anywhere in macOS</title>
-<meta name="description" content="Free, open-source macOS menu bar app. Select text in any app, press a hotkey, and your own prompt streams the answer into a floating markdown window. Works with Ollama, a ChatGPT or Claude subscription via CLIProxyAPI, Gemini, OpenRouter, or any OpenAI-compatible endpoint.">
+<meta name="description" content="Run your own prompts on selected text, anywhere in macOS. Free and open source; works with Ollama, ChatGPT/Claude subscriptions, or any OpenAI-compatible API.">
 <link rel="canonical" href="https://impelcrypto.github.io/Holster/">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="apple-touch-icon" href="assets/icon.png">
@@ -22,6 +22,7 @@
     document.documentElement.dataset.theme =
       saved === 'light' || saved === 'dark' ? saved :
       (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.classList.add('js');
   })();
 </script>
 <style>
@@ -41,7 +42,6 @@
     --nav-bg: rgba(238, 237, 240, .78);
     --glow: .16;
     --btn-text: #2A1704;
-    --kbd-bg: rgba(255, 255, 255, .85);
     --shadow: 0 24px 70px rgba(29, 20, 12, .18);
   }
   @media (prefers-color-scheme: dark) {
@@ -73,7 +73,6 @@
     --grad-ink: linear-gradient(135deg, #FFC97E, #C66E3D);
     --nav-bg: rgba(25, 24, 27, .72);
     --glow: .30;
-    --kbd-bg: rgba(255, 255, 255, .07);
     --shadow: 0 30px 90px rgba(0, 0, 0, .55);
   }
 
@@ -112,10 +111,13 @@
   .nav-links a { text-decoration: none; font-size: 14px; color: var(--muted); transition: color .2s; }
   .nav-links a:hover { color: var(--text); }
   .theme-btn {
-    width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer;
+    display: none;
+    width: 34px; height: 34px; place-items: center; cursor: pointer; position: relative;
     color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 10px;
     transition: border-color .2s, color .2s;
   }
+  .js .theme-btn { display: grid; }
+  .theme-btn::after { content: ""; position: absolute; inset: -6px; }
   .theme-btn:hover { border-color: var(--copper); color: var(--text); }
   .theme-btn svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   :root[data-theme="light"] .icon-sun { display: none; }
@@ -162,11 +164,6 @@
     -webkit-text-fill-color: transparent; color: transparent;
   }
   .hero-sub { max-width: 56ch; margin: 0 auto 34px; color: var(--muted); font-size: 17px; }
-  kbd {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .82em;
-    background: var(--kbd-bg); border: 1px solid var(--line); border-bottom-width: 2px;
-    border-radius: 6px; padding: 2px 7px; color: var(--text); white-space: nowrap;
-  }
   .cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-bottom: 64px; }
   .btn {
     display: inline-flex; align-items: center; gap: 9px; text-decoration: none;
@@ -231,7 +228,7 @@
   .feat-icon svg { width: 21px; height: 21px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .feat h3 { font-size: 16.5px; margin-bottom: 8px; letter-spacing: -.01em; }
   .feat p { color: var(--muted); font-size: 14.5px; }
-  .feat p code, .step p code, .also code {
+  .feat p code, .step p code, .also code, .section-sub code, .tts-note code {
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em;
     background: var(--inset); border-radius: 5px; padding: 1px 5px;
   }
@@ -269,6 +266,21 @@
   .prov h3 { font-size: 17px; letter-spacing: -.01em; }
   .prov p { color: var(--muted); font-size: 14.5px; }
   .prov p code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em; background: var(--inset); border-radius: 5px; padding: 1px 5px; }
+
+  /* vs cards & use-case pills */
+  .vs-p { font-size: 14.5px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .vs-p:first-of-type { padding-top: 2px; border-top: 0; }
+  .vs-p strong {
+    display: block; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: .08em; font-weight: 600; margin-bottom: 4px;
+  }
+  .vs-p.holster strong { color: var(--accent-ink); }
+  .vs-p.raycast, .vs-p.raycast strong { color: var(--muted); }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+  .tts-note { color: var(--muted); font-size: 14.5px; max-width: 64ch; margin-bottom: 40px; }
+  .shot { margin: 0; }
+  .shot-frame { display: block; max-width: 720px; margin-inline: 0; }
+  .shot-cap { font-size: 13px; color: var(--muted); margin-top: 14px; }
 
   /* install */
   .install-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
@@ -308,32 +320,43 @@
   /* grid items must shrink below their pre/code min-content on narrow screens */
   .steps > *, .feat-grid > *, .prov-grid > *, .install-grid > * { min-width: 0; }
 
-  /* reveal animation */
-  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .65s cubic-bezier(.22, 1, .36, 1), transform .65s cubic-bezier(.22, 1, .36, 1); transition-delay: var(--d, 0s); }
-  .reveal.in { opacity: 1; transform: none; }
+  /* reveal animation (armed only when JS runs, so a script failure never blanks the page) */
+  .reveal { transition: opacity .65s cubic-bezier(.22, 1, .36, 1), transform .65s cubic-bezier(.22, 1, .36, 1); transition-delay: var(--d, 0s); }
+  .js .reveal { opacity: 0; transform: translateY(18px); }
+  .js .reveal.in { opacity: 1; transform: none; }
 
   @media (max-width: 900px) {
     .feat-grid, .prov-grid { grid-template-columns: 1fr 1fr; }
+    .steps, .vs-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 760px) {
-    .steps, .install-grid { grid-template-columns: 1fr; }
+    .install-grid { grid-template-columns: 1fr; }
     .hero { padding-top: 124px; }
   }
   @media (max-width: 620px) {
     .feat-grid, .prov-grid { grid-template-columns: 1fr; }
-    .nav-links { display: none; }
+    .nav-links a:not([href="#install"]) { display: none; }
     .wrap { width: min(1080px, 100% - 32px); }
     .hero-icon { width: 76px; height: 76px; }
     .hero-sub { font-size: 15.5px; }
   }
+  .skip {
+    position: absolute; left: -9999px; z-index: 100;
+    padding: 10px 16px; border-radius: 10px; background: var(--bg);
+    border: 1px solid var(--copper); color: var(--text); text-decoration: none; font-size: 14px;
+  }
+  .skip:focus { left: 12px; top: 12px; position: fixed; }
+
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     * { animation: none !important; transition: none !important; }
-    .reveal { opacity: 1; transform: none; }
+    .js .reveal { opacity: 1; transform: none; }
   }
 </style>
 </head>
 <body>
+
+<a class="skip" href="#main">Skip to content</a>
 
 <nav class="nav" aria-label="Main">
   <div class="wrap nav-inner">
@@ -363,14 +386,14 @@
       <a href="#providers">Providers</a>
       <a href="#install">Install</a>
     </div>
-    <button class="theme-btn" type="button" aria-label="Toggle color theme">
-      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
-    </button>
     <a class="nav-gh" href="https://github.com/impelcrypto/Holster" target="_blank" rel="noopener">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
       GitHub
     </a>
+    <button class="theme-btn" type="button" aria-label="Toggle color theme">
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+    </button>
     </div>
   </div>
 </nav>
@@ -399,17 +422,20 @@
       <a class="btn btn-ghost" href="https://github.com/impelcrypto/Holster" target="_blank" rel="noopener">View on GitHub</a>
     </div>
     <div class="demo-frame reveal">
-      <img src="assets/demo.gif" alt="Selecting a sentence in TextEdit, pressing the hotkey, and the Grammar Teacher command streaming corrections into a floating window" width="1000" height="575">
+      <picture>
+        <source srcset="assets/demo-still.jpg" media="(prefers-reduced-motion: reduce)">
+        <img src="assets/demo.gif" alt="Selecting a sentence in TextEdit, pressing the hotkey, and the Grammar Teacher command streaming corrections into a floating window" width="1000" height="575">
+      </picture>
     </div>
   </div>
 </header>
 
-<main>
+<main id="main">
   <section id="how">
     <div class="wrap">
       <p class="eyebrow reveal">How it works</p>
-      <h2 class="reveal">Three keystrokes between a selection and an answer</h2>
-      <p class="section-sub reveal">One global hotkey per command. Each command is a prompt file with a provider and a model behind it.</p>
+      <h2 class="reveal">One hotkey between a selection and an answer</h2>
+      <p class="section-sub reveal">Each command is a prompt file with a provider, a model, and a global hotkey of its own.</p>
       <div class="steps">
         <div class="step reveal"><span class="step-num">01</span>
           <h3>Select</h3>
@@ -424,6 +450,28 @@
           <p>The answer streams into a floating markdown window. <code>⌘↩</code> copies the result and closes it.</p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="prompts">
+    <div class="wrap">
+      <p class="eyebrow reveal">Prompts</p>
+      <h2 class="reveal">What you holster is up to you</h2>
+      <p class="section-sub reveal">A command is one prompt file and one hotkey. The selected text lands in <code>{selection}</code>; you decide what comes back.</p>
+      <div class="pill-row reveal">
+        <span class="badge">Grammar teacher</span>
+        <span class="badge">Translator</span>
+        <span class="badge">What does it stand for?</span>
+        <span class="badge">Email polish</span>
+        <span class="badge">Pronunciation coach</span>
+      </div>
+      <p class="tts-note reveal">The pronunciation coach pairs with the built-in speak key (<code>⌘S</code>): an unfamiliar word comes back with phonetic symbols and gets read aloud by a free Edge voice.</p>
+      <figure class="shot reveal">
+        <a class="demo-frame shot-frame" href="assets/command-editor.png" target="_blank" rel="noopener" aria-label="Open the command editor screenshot at full size">
+          <img src="assets/command-editor.png" alt="Holster settings window: the Grammar Teacher command editor with hotkey, provider, model, fallback, and prompt fields" width="802" height="813" loading="lazy">
+        </a>
+        <figcaption class="shot-cap">Build and edit commands in Settings, or edit the files directly. Both stay in sync.</figcaption>
+      </figure>
     </div>
   </section>
 
@@ -468,6 +516,31 @@
     </div>
   </section>
 
+  <section id="vs">
+    <div class="wrap">
+      <p class="eyebrow reveal">Compared</p>
+      <h2 class="reveal">Coming from Raycast AI?</h2>
+      <p class="section-sub reveal">Holster started life as a replacement for Raycast AI custom commands.</p>
+      <div class="prov-grid vs-grid">
+        <div class="prov reveal">
+          <h3>Price</h3>
+          <p class="vs-p holster"><strong>Holster</strong>Free. MIT-licensed, no account.</p>
+          <p class="vs-p raycast"><strong>Raycast AI</strong>Pro subscription at $8/month, frontier models another $8. Or bring an OpenAI, Anthropic, or Google key and pay per token.</p>
+        </div>
+        <div class="prov reveal" style="--d:.1s">
+          <h3>Models</h3>
+          <p class="vs-p holster"><strong>Holster</strong>Any OpenAI-compatible endpoint: local Ollama, the ChatGPT or Claude subscription you already have, OpenRouter.</p>
+          <p class="vs-p raycast"><strong>Raycast AI</strong>Raycast's model lineup, or keys from the big three providers.</p>
+        </div>
+        <div class="prov reveal" style="--d:.2s">
+          <h3>Result window</h3>
+          <p class="vs-p holster"><strong>Holster</strong>Floats until you close it. Click into another window and it keeps streaming.</p>
+          <p class="vs-p raycast"><strong>Raycast AI</strong>Spotlight-style window that dismisses when it loses focus.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section aria-label="Privacy">
     <div class="wrap">
       <div class="privacy-panel reveal">
@@ -492,7 +565,7 @@
         <div class="prov reveal" style="--d:.1s">
           <span class="prov-badge">No API key</span>
           <h3>CLIProxyAPI</h3>
-          <p>Signs in to the ChatGPT or Claude subscription you already pay for and serves it on an OpenAI-compatible port. Nothing per token.</p>
+          <p>Signs in to the ChatGPT or Claude subscription you already pay for and serves it on an OpenAI-compatible port. You pay nothing per token.</p>
         </div>
         <div class="prov reveal" style="--d:.2s">
           <span class="prov-badge">Bring a key</span>
@@ -507,13 +580,13 @@
     <div class="wrap">
       <p class="eyebrow reveal">Install</p>
       <h2 class="reveal">On your Mac in a minute</h2>
-      <p class="section-sub reveal">Apple Silicon only, macOS 14 or later. There is no Intel build.</p>
+      <p class="section-sub reveal">Apple Silicon only, macOS 14 or later.</p>
       <div class="install-grid">
         <div class="install-card reveal">
           <h3>Homebrew</h3>
           <p>Tap, trust, install.</p>
           <div class="codeblock">
-            <button class="copy" data-copy="brew tap impelcrypto/tap
+            <button class="copy" aria-live="polite" data-copy="brew tap impelcrypto/tap
 brew trust impelcrypto/tap
 brew install --cask holster" type="button">Copy</button>
             <pre>brew tap impelcrypto/tap
@@ -528,7 +601,7 @@ brew install --cask holster</pre>
             <pre><span class="c"># or build from source</span>
 git clone https://github.com/impelcrypto/Holster.git
 cd Holster &amp;&amp; make install</pre>
-            <button class="copy" data-copy="git clone https://github.com/impelcrypto/Holster.git
+            <button class="copy" aria-live="polite" data-copy="git clone https://github.com/impelcrypto/Holster.git
 cd Holster && make install" type="button">Copy</button>
           </div>
         </div>
@@ -567,10 +640,15 @@ cd Holster && make install" type="button">Copy</button>
 </footer>
 
 <script>
-  document.querySelector('.theme-btn').addEventListener('click', () => {
+  const themeBtn = document.querySelector('.theme-btn');
+  const themeLabel = () => themeBtn.setAttribute('aria-label',
+    document.documentElement.dataset.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+  themeLabel();
+  themeBtn.addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
     localStorage.setItem('theme', next);
+    themeLabel();
   });
 
   const io = new IntersectionObserver(entries => {
