@@ -4,7 +4,7 @@
 
 # Holster
 
-Run your own prompts on selected text, anywhere in macOS.
+Run your own prompts on selected text, anywhere on macOS.
 
 [![License](https://img.shields.io/badge/license-MIT-0B347C)](LICENSE)
 ![Platform](https://img.shields.io/badge/macOS-14%2B%20Apple%20Silicon-0B347C)
