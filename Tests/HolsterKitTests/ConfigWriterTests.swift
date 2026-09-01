@@ -82,6 +82,16 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(reparsed.commands.count, 1)
     }
 
+    func testSaveTTSSwitchesProvider() throws {
+        try store.saveTTS(provider: "system", voice: "com.apple.voice.premium.en-US.Ava")
+        XCTAssertEqual(store.config?.tts?.provider, "system")
+
+        let reparsed = try Config.parse(yaml: String(
+            contentsOf: directory.appendingPathComponent("config.yaml"), encoding: .utf8))
+        XCTAssertEqual(reparsed.tts?.provider, "system")
+        XCTAssertEqual(reparsed.tts?.voice, "com.apple.voice.premium.en-US.Ava")
+    }
+
     func testSaveTTSPreservesConfiguredEndpoint() throws {
         try """
         providers:

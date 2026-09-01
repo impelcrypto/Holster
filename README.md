@@ -50,7 +50,8 @@ them in git. Built as a stable replacement for Raycast AI custom commands.
 Holster has no telemetry and no backend. Your selected text goes to the endpoint
 you configure and nowhere else. The one exception is text-to-speech. With
 `tts.provider: edge`, the default in the example config, whatever you ask Holster
-to speak goes to Microsoft's read-aloud service.
+to speak goes to Microsoft's read-aloud service. Settings → Speak → Source →
+System switches to a voice installed on your Mac, which sends nothing anywhere.
 
 ## Install
 
@@ -187,8 +188,9 @@ providers:                 # any OpenAI-compatible endpoints
 
 default_provider: cliproxy
 
-tts:                       # provider: edge = free Edge voices, no API key;
-  provider: edge           #   base_url = OpenAI-compatible; neither = macOS voice
+tts:                       # provider: edge = free Edge voices, sent to Microsoft;
+  provider: edge           #   provider: system = macOS voice, nothing sent;
+                           #   base_url = OpenAI-compatible /audio/speech
   voice: en-US-AvaMultilingualNeural
 
 commands:
@@ -268,10 +270,11 @@ never leak between configs.
 - `provider: edge` rides Microsoft Edge's free read-aloud voices over a
   WebSocket. No API key, but it is an unofficial endpoint that may change. On
   any failure Holster drops back to the built-in macOS voice.
-- The built-in macOS voice (no provider, no base_url) honors `tts.voice`, either
-  a name like `Ava` or a full identifier. Premium voices need a manual download
-  from System Settings → Accessibility → Spoken Content → System voice → Manage
-  Voices… → English (US). An uninstalled voice falls back to the default en-US one.
+- The built-in macOS voice (`provider: system`, or no provider and no base_url)
+  honors `tts.voice`, either a name like `Ava` or a full identifier. The standard
+  voices sound flat next to Edge's; Premium ones are a free download, and
+  [Apple's instructions](https://support.apple.com/guide/mac-help/mchlp2290/mac)
+  cover it. An uninstalled voice falls back to the default en-US one.
 - A result window that is already open keeps the old theme until the next run.
 
 ## Contributing

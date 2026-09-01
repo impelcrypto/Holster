@@ -168,13 +168,14 @@ extension ConfigStore {
         try write(config)
     }
 
-    /// Persists the Speak voice picked in Settings. Only the voice changes:
-    /// an existing base_url/provider setup must survive a voice pick.
-    public func saveTTS(voice: String) throws {
+    /// Persists the Speak voice picked in Settings. A nil provider leaves the
+    /// existing base_url/provider setup alone, so a voice pick can't clobber it.
+    public func saveTTS(provider: String? = nil, voice: String) throws {
         guard var config else {
             throw ConfigError.validation("Fix config.yaml before editing settings in the GUI")
         }
         var tts = config.tts ?? TTSConfig(provider: "edge")
+        if let provider { tts.provider = provider }
         tts.voice = voice
         config.tts = tts
         try write(config)

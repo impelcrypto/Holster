@@ -505,6 +505,8 @@
               <button class="prompt-tab" role="tab" aria-selected="true" aria-controls="pp-0" id="pt-0" type="button">Grammar Teacher</button>
               <button class="prompt-tab" role="tab" aria-selected="false" aria-controls="pp-1" id="pt-1" type="button">Translator</button>
               <button class="prompt-tab" role="tab" aria-selected="false" aria-controls="pp-2" id="pt-2" type="button">What does it stand for?</button>
+              <button class="prompt-tab" role="tab" aria-selected="false" aria-controls="pp-3" id="pt-3" type="button">Make It Plain</button>
+              <button class="prompt-tab" role="tab" aria-selected="false" aria-controls="pp-4" id="pt-4" type="button">Fit One Post</button>
             </div>
             <button class="copy prompt-copy" aria-live="polite" type="button">Copy</button>
           </div>
@@ -659,6 +661,53 @@ Full form: As Soon As Possible
 Meaning (JP): なるべく早く
 
 {selection}</pre>
+          <pre class="prompt-pane" id="pp-3" role="tabpanel" aria-labelledby="pt-3" tabindex="0" hidden>You explain difficult text so a 13-year-old can follow it.
+
+The text:
+
+{selection}
+
+Output the rewritten text only. No preamble, no closing remark.
+
+Rules:
+
+1. Short sentences. One idea per sentence.
+2. Keep every term that carries meaning. Put a plain explanation in parentheses right after it, the first time it appears.
+
+    Example: the lessee (the person renting the property)
+
+3. Never drop a condition, an exception, a number, or a deadline. Losing one of those changes what the text means.
+4. Do not add facts, examples, or opinions that are not in the text.
+5. Write in the same language as the input.
+6. If a sentence is genuinely ambiguous, do not guess. After the rewrite, add one final line:
+
+    Unclear: [what could be read two ways]
+
+7. If the text is already easy to read, output it unchanged.</pre>
+          <pre class="prompt-pane" id="pp-4" role="tabpanel" aria-labelledby="pt-4" tabindex="0" hidden>You compress text into a single post for X.
+
+The text:
+
+{selection}
+
+Output the post only. One version, no alternatives, no explanation, no quotation marks around it.
+
+Length:
+
+- X weighs characters, it does not count them. Latin letters, digits, and
+  punctuation weigh 1. Japanese, Chinese, Korean, and emoji weigh 2.
+- The budget is 280 weighted units. That is 280 English characters, or 140
+  Japanese characters.
+- Count before you answer. One unit over and the post cannot be sent.
+
+Rules:
+
+1. Keep the single most important claim. Cut everything that only supports it.
+2. Write in the same language as the input.
+3. Never invent a number, a name, a date, or a link that is not in the text.
+4. Keep product names, handles, and URLs exactly as written.
+5. No hashtags unless the text already has them.
+6. Plain sentences. No "Thread 🧵", no "Here's why:", no cliffhanger, no closing question.</pre>
         </div>
         <figure class="shot">
           <a class="demo-frame shot-frame" href="assets/command-editor.png" target="_blank" rel="noopener" aria-label="Open the command editor screenshot at full size">
@@ -694,6 +743,16 @@ Meaning (JP): なるべく早く
           <div class="feat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l7.5 16 2-6.5L20 11 4 4Z"/></svg></div>
           <h3>Focus stays where you put it</h3>
           <p>The app never activates, so your editor keeps the cursor. Click away and the panel moves behind your windows instead of vanishing.</p>
+        </div>
+        <div class="feat reveal" style="--d:.24s">
+          <div class="feat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></div>
+          <h3>Hear it out loud</h3>
+          <p><code>⌘S</code> reads the answer aloud. The free default voices are Microsoft's, so the text goes to them. Set <strong>Source</strong> to <strong>System</strong> for a voice that lives on your Mac.</p>
+        </div>
+        <div class="feat reveal" style="--d:.3s">
+          <div class="feat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+          <h3>You write what it does</h3>
+          <p>A command is a prompt file you wrote, so it does the thing you actually do all day: draft the support reply, put a lease clause into plain language, split an abstract into method and result. Nothing here is a preset you have to live with.</p>
         </div>
       </div>
     </div>
