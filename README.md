@@ -63,7 +63,7 @@ brew trust impelcrypto/tap   # Homebrew refuses casks from taps you have not tru
 brew install --cask holster
 ```
 
-Or download `Holster-0.1.1.zip` from the
+Or download `Holster-0.2.0.zip` from the
 [latest release](https://github.com/impelcrypto/Holster/releases/latest), unzip
 it, and drag `Holster.app` into `/Applications`.
 
