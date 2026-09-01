@@ -25,10 +25,19 @@ struct SpeakSettingsView: View {
     @State private var saveError: String?
     @State private var speaker = Speaker()
 
-    /// An OpenAI-compatible endpoint set in config.yaml wins over both sources,
-    /// and the GUI has no fields for it, so it only reports what it found.
+    /// A base_url in config.yaml takes the GUI out of the loop: there are no
+    /// fields for it here, so the pane only reports what it found.
     private var hasCustomEndpoint: Bool {
         !(store.config?.tts?.baseURL ?? "").isEmpty
+    }
+
+    /// Speaker.fetchAudio checks provider == "edge" before base_url, so with both
+    /// set the audio is still Microsoft's. Naming the wrong one would be a false
+    /// privacy disclosure, so say which one wins.
+    private var customEndpointNote: String {
+        store.config?.tts?.provider == "edge"
+            ? "config.yaml sets provider: edge alongside tts.base_url, and edge wins, so the text you speak still goes to Microsoft. Drop provider: edge to use your endpoint instead."
+            : "Speech comes from the endpoint at tts.base_url in config.yaml. Remove it to pick a voice here."
     }
 
     private var localeNames: [String] {
@@ -71,7 +80,7 @@ struct SpeakSettingsView: View {
             SettingsCard {
                 if hasCustomEndpoint {
                     noteRow("gearshape.fill", .secondary) {
-                        Text("Speech comes from the endpoint at tts.base_url in config.yaml. Remove it to pick a voice here.")
+                        Text(customEndpointNote)
                     }
                 } else {
                     SettingRow(label: "Source") {
