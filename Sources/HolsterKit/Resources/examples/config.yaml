@@ -22,12 +22,13 @@ providers:
 default_provider: cliproxy
 
 # TTS. Three modes:
-#   provider: edge         -> free Microsoft Edge voices, no API key (voice is
-#                             an Edge name like en-US-AvaMultilingualNeural)
+#   provider: edge         -> free Microsoft Edge voices, no API key. The text
+#                             you speak goes to Microsoft (voice is an Edge name
+#                             like en-US-AvaMultilingualNeural)
 #   base_url set           -> OpenAI-compatible /audio/speech (voice e.g. alloy)
-#   neither                -> built-in macOS voice (voice is a macOS name like
-#                             Ava; premium voices download in System Settings >
-#                             Accessibility > Spoken Content > Manage Voices)
+#   provider: system       -> built-in macOS voice, nothing leaves the Mac (voice
+#                             is a macOS name or identifier like Ava; premium
+#                             voices download in System Settings > Accessibility)
 tts:
   provider: edge
   voice: en-US-AvaMultilingualNeural
