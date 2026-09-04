@@ -75,6 +75,8 @@ struct ResultView: View {
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: model.toast)
         .tint(HolsterTheme.accentDeep)
+        // Empty on purpose: reading visualStyle here makes SwiftUI re-render so
+        // HolsterTheme picks up the new style.
         .onChange(of: visualStyle) {}
         // SwiftUI's .textSelection is NSTextView-backed; read its selection so
         // Speak targets exactly what the user highlighted.

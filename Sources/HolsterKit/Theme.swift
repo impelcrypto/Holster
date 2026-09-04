@@ -74,8 +74,8 @@ enum HolsterTheme {
     }
 }
 
-/// These tokens are `static let`, so a plain `isDark ? a : b` would freeze at
-/// first use. An NSColor dynamic provider re-resolves on every draw instead.
+/// A plain `isDark ? a : b` would bake in the appearance current when the view
+/// body last ran. An NSColor dynamic provider re-resolves on every draw instead.
 private func adaptive(dark: Color, light: Color) -> Color {
     Color(nsColor: NSColor(name: nil) { appearance in
         NSColor(appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light)

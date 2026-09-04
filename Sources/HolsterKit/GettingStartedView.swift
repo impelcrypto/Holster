@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// Harper-style onboarding: status banner, progress and numbered steps.
@@ -121,6 +120,8 @@ struct GettingStartedView: View {
         }
         .background(HolsterTheme.windowBackground.ignoresSafeArea())
         .navigationTitle("Getting Started")
+        // Empty on purpose: reading visualStyle here makes SwiftUI re-render so
+        // HolsterTheme picks up the new style.
         .onChange(of: visualStyle) {}
         .onReceive(permissionTimer) { _ in
             accessibilityGranted = SelectionCapture.hasPermission

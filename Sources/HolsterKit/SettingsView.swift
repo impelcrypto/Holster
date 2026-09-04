@@ -90,6 +90,8 @@ struct SettingsView: View {
             statusBar
         }
         .frame(minWidth: 760, minHeight: 520)
+        // Empty on purpose: reading visualStyle here makes SwiftUI re-render so
+        // HolsterTheme picks up the new style.
         .onChange(of: visualStyle) {}
         // The scratch recorder shortcut must not stay registered globally once
         // the settings window closes. KeyboardShortcuts unregisters by VALUE,
