@@ -4,7 +4,9 @@
 
 Holster is a compact native macOS utility with the quiet density of a system
 preferences pane. Its signature is warm amber hardware-inspired accents over
-layered neutral surfaces, reflecting the brass and leather app icon.
+layered neutral surfaces, reflecting the brass and leather app icon. The
+optional Western style shifts the same layout to brass, saddle leather and
+parchment without changing the information hierarchy.
 
 ## 2. Color
 
@@ -15,10 +17,18 @@ Colors are defined in `HolsterTheme` and adapt to light and dark appearances.
 | Accent | `HolsterTheme.accent` | Icons and selected controls |
 | Accent deep | `HolsterTheme.accentDeep` | Window tint and focus color |
 | Accent gradient | `HolsterTheme.accentGradient` | Primary actions and selection pills |
-| Window | `HolsterTheme.windowBackground` | Detail backgrounds |
+| Window | `HolsterTheme.windowBackground` | Detail backgrounds (parchment in Western) |
 | Card | `HolsterTheme.card` | Grouped settings |
 | Inset | `HolsterTheme.inset` | Fields, editors, segmented controls |
 | Hairline | `HolsterTheme.hairline` | Dividers and subtle outlines |
+| Banner warn/success | `HolsterTheme.bannerWarningBackground` / `bannerSuccessBackground` | Status banner wash |
+| Overline | `HolsterTheme.overline` | Section headers (brass in Western) |
+
+Style switching lives beside the light/dark mode in Appearance:
+`VisualStyle` (`standard`/`western`, UserDefaults `visualStyle`). Tokens are
+computed from `VisualStyle.stored` so `@AppStorage(VisualStyle.storageKey)`
+re-renders pick up the change; `AppearancePreference` still owns
+`NSApp.appearance` only.
 
 Semantic text and status colors use SwiftUI system colors so they continue to
 track macOS accessibility and appearance settings.
@@ -43,7 +53,7 @@ window-level layout and detail screens own their scrolling.
 
 - Structure: zero-spacing vertical stack on the card surface.
 - States: content owns control states; the container remains static.
-- Layout: groups related settings with 12 pt continuous corners.
+- Layout: groups related settings with 12 pt continuous corners (14 pt in Western).
 
 ### SettingRow and RowDivider
 
@@ -80,6 +90,17 @@ window-level layout and detail screens own their scrolling.
 - Variants: filled primary action and translucent secondary action.
 - States: default, hover, pressed, and disabled.
 - Motion: hover feedback uses a 120 ms ease-out transition.
+
+### StatusBanner
+
+- Structure: tinted wash with icon tile, bold title, secondary message and optional trailing action.
+- States: warning (peach) and success (mint); never encode meaning by color alone — icon plus text always present.
+- Layout: 16 pt padding, card-radius corners, hairline outline.
+
+### GettingStartedView
+
+- Structure: status banner, large title, `SetupProgressBar` (required steps only, optional step excluded) and a `SettingsCard` of `StepStatusIcon` rows.
+- Content: mirrors General's System Health state (Accessibility, config/commands) without duplicating its controls.
 
 ## 6. Motion & Interaction
 

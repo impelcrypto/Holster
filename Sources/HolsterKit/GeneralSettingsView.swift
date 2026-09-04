@@ -6,12 +6,14 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @ObservedObject var store: ConfigStore
     @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system
+    @AppStorage(VisualStyle.storageKey) private var visualStyle = VisualStyle.standard
     @State private var accessibilityGranted = SelectionCapture.hasPermission
     private let permissionTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                statusBanner
                 header
                 SettingsSection(title: "System Health") {
                     SettingsCard {
@@ -66,7 +68,7 @@ struct GeneralSettingsView: View {
                 }
                 SettingsSection(title: "Appearance") {
                     SettingsCard {
-                        SettingRow(label: "Theme") {
+                        SettingRow(label: "Mode") {
                             SegmentedPicker(
                                 options: AppearancePreference.allCases.map {
                                     (label: $0.label, value: $0.rawValue)
@@ -74,6 +76,16 @@ struct GeneralSettingsView: View {
                                 selection: Binding(
                                     get: { appearance.rawValue },
                                     set: { appearance = AppearancePreference(rawValue: $0) ?? .system }))
+                        }
+                        RowDivider()
+                        SettingRow(label: "Style") {
+                            SegmentedPicker(
+                                options: VisualStyle.allCases.map {
+                                    (label: $0.label, value: $0.rawValue)
+                                },
+                                selection: Binding(
+                                    get: { visualStyle.rawValue },
+                                    set: { visualStyle = VisualStyle(rawValue: $0) ?? .standard }))
                         }
                     }
                 }
@@ -104,6 +116,27 @@ struct GeneralSettingsView: View {
             names.append("tts")
         }
         return names
+    }
+
+    private var statusBanner: some View {
+        Group {
+            if let error = store.lastError {
+                StatusBanner(
+                    kind: .warning,
+                    title: "Config needs attention",
+                    message: error)
+            } else if !accessibilityGranted {
+                StatusBanner(
+                    kind: .warning,
+                    title: "Holster is not checking anything yet",
+                    message: "Grant Accessibility permission so Holster can grab the selected text.")
+            } else {
+                StatusBanner(
+                    kind: .success,
+                    title: "You're all set",
+                    message: "Holster can access text and your config is loaded.")
+            }
+        }
     }
 
     private var header: some View {
