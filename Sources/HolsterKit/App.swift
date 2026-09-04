@@ -47,7 +47,7 @@ struct HolsterApp: App {
         Window("Holster Settings", id: "settings") {
             SettingsView(store: store)
         }
-        .defaultSize(width: 860, height: 580)
+        .defaultSize(width: 920, height: 600)
     }
 }
 

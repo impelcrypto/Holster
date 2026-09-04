@@ -45,6 +45,7 @@ private struct PulsingDot: View {
 struct ResultView: View {
     @ObservedObject var model: RunViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(VisualStyle.storageKey) private var visualStyle = VisualStyle.standard
     var onContentHeight: (CGFloat) -> Void = { _ in }
 
     var body: some View {
@@ -74,6 +75,9 @@ struct ResultView: View {
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: model.toast)
         .tint(HolsterTheme.accentDeep)
+        // Empty on purpose: reading visualStyle here makes SwiftUI re-render so
+        // HolsterTheme picks up the new style.
+        .onChange(of: visualStyle) {}
         // SwiftUI's .textSelection is NSTextView-backed; read its selection so
         // Speak targets exactly what the user highlighted.
         .onReceive(NotificationCenter.default.publisher(for: NSTextView.didChangeSelectionNotification)) { note in
@@ -95,6 +99,11 @@ struct ResultView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
+            if HolsterTheme.isWestern {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(HolsterTheme.accentDeep)
+            }
             Text(model.commandName)
                 .font(.system(size: 14, weight: .semibold))
             Text(model.modelName)
@@ -102,8 +111,10 @@ struct ResultView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 2)
-                .background(Color.primary.opacity(0.07), in: Capsule())
-                .overlay(Capsule().strokeBorder(HolsterTheme.hairline, lineWidth: 1))
+                .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: HolsterTheme.badgeRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: HolsterTheme.badgeRadius, style: .continuous)
+                        .strokeBorder(HolsterTheme.isWestern ? HolsterTheme.accentDeep.opacity(0.5) : HolsterTheme.hairline, lineWidth: 1))
             Spacer()
             if model.state == .streaming || model.isSelecting {
                 Text(statusLabel)
