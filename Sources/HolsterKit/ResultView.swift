@@ -1,23 +1,5 @@
 import AppKit
-import MarkdownUI
 import SwiftUI
-
-/// gitHub theme minus its opaque page background: text renders straight on
-/// the panel material, tables get a translucent row tint instead.
-extension MarkdownUI.Theme {
-    static let holster = Theme.gitHub
-        .text {
-            FontSize(15)
-        }
-        .table { configuration in
-            configuration.label
-                .fixedSize(horizontal: false, vertical: true)
-                .markdownTableBorderStyle(.init(color: Color.primary.opacity(0.22)))
-                .markdownTableBackgroundStyle(
-                    .alternatingRows(Color.clear, Color.primary.opacity(0.05)))
-                .markdownMargin(top: 0, bottom: 16)
-        }
-}
 
 private struct ContentHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
@@ -146,9 +128,7 @@ struct ResultView: View {
         default:
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Markdown(model.markdown)
-                        .markdownTheme(.holster)
-                        .textSelection(.enabled)
+                    MarkdownTextView(markdown: model.markdown)
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if case .failed(let message) = model.state {

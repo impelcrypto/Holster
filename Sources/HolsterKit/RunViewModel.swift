@@ -111,7 +111,7 @@ public final class RunViewModel: ObservableObject {
         }
     }
 
-    /// MarkdownUI re-parses the whole document on every update, so deltas are
+    /// The markdown is re-parsed whole on every update, so deltas are
     /// coalesced to ~10 renders/second.
     public func append(_ chunk: String) {
         if isReasoning { isReasoning = false }
