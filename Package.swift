@@ -9,7 +9,6 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.0.0"),
-        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.4.0"),
         .package(url: "https://github.com/jpsim/Yams", from: "5.1.0"),
     ],
     targets: [
@@ -17,7 +16,6 @@ let package = Package(
             name: "HolsterKit",
             dependencies: [
                 "KeyboardShortcuts",
-                .product(name: "MarkdownUI", package: "swift-markdown-ui"),
                 "Yams",
             ],
             resources: [
